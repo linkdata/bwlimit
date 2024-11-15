@@ -2,7 +2,6 @@ package bwlimit
 
 import (
 	"context"
-	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -11,45 +10,56 @@ import (
 
 type Dialer struct {
 	net.Dialer // underlying net.Dialer
-	ReadLimit  atomic.Uint32
-	WriteLimit atomic.Uint32
-	readers    atomic.Uint32
-	writers    atomic.Uint32
-	readAvail  atomic.Uint32
-	writeAvail atomic.Uint32
+	ReadLimit  int32
+	WriteLimit int32
+	ReadRate   int32
+	WriteRate  int32
+	readAvail  int32
+	writeAvail int32
+	readCount  int32
+	writeCount int32
 	init       sync.Once
+	readCh     chan struct{}
+	writeCh    chan struct{}
 }
 
-func (d *Dialer) ticker() {
-	const secparts = 10
-	const interval = time.Second / secparts
+const secparts = 100
+const interval = time.Second / secparts
+
+func limiter(ch chan struct{}, limit, avail, count, rate *int32) {
+	defer close(ch)
+
 	now := time.Now()
 	toSleep := interval
+	seccount := 0
+	var accum int32
 	for {
 		time.Sleep(toSleep)
 		if elapsed := time.Since(now); elapsed > 0 {
-			now.Add(elapsed)
+			seccount++
+			now = now.Add(elapsed)
 			toSleep += interval - elapsed
-			if rl := d.ReadLimit.Load(); rl > 0 {
-				if d.readAvail.Add(max(1, rl/secparts)) > rl {
-					d.readAvail.Store(rl)
+			accum += atomic.LoadInt32(limit) / secparts
+			accum += atomic.SwapInt32(avail, 0)
+			for accum >= 1024 {
+				accum -= 1024
+				select {
+				case ch <- struct{}{}:
+				default:
 				}
-			} else {
-				d.readAvail.Store(math.MaxUint32)
 			}
-			if wl := d.WriteLimit.Load(); wl > 0 {
-				if d.writeAvail.Add(max(1, wl/secparts)) > wl {
-					d.writeAvail.Store(wl)
-				}
-			} else {
-				d.writeAvail.Store(math.MaxUint32)
+			if seccount%secparts == 0 {
+				atomic.StoreInt32(rate, atomic.SwapInt32(count, 0))
 			}
 		}
 	}
 }
 
 func (d *Dialer) initialize() {
-	go d.ticker()
+	d.readCh = make(chan struct{}, secparts)
+	d.writeCh = make(chan struct{}, secparts)
+	go limiter(d.readCh, &d.ReadLimit, &d.readAvail, &d.readCount, &d.ReadRate)
+	go limiter(d.writeCh, &d.WriteLimit, &d.writeAvail, &d.writeCount, &d.WriteRate)
 }
 
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (conn net.Conn, err error) {
@@ -58,6 +68,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (conn
 		conn = &Conn{
 			Dialer: d,
 			Conn:   conn,
+			ctx:    ctx,
 		}
 	}
 	return
