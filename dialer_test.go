@@ -2,7 +2,6 @@ package bwlimit
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,8 +14,7 @@ func TestDialer_Dial(t *testing.T) {
 	l := NewLimiter(ctx)
 
 	d := &Dialer{
-		DialContextFn: (&net.Dialer{}).DialContext,
-		Limiter:       l,
+		Limiter: l,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
