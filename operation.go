@@ -47,7 +47,6 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 					case ch <- struct{}{}:
 					case <-ctx.Done():
 						return
-					default:
 					}
 				}
 			}
