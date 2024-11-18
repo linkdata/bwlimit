@@ -30,35 +30,41 @@ func NewOperation(ctx context.Context, reader bool) (op *Operation) {
 func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 	defer close(ch)
 	seccount := 0
-	now := time.Now()
+	counts := make([]int32, secparts)
+	tckr := time.NewTicker(interval)
+	defer tckr.Stop()
 
 	for {
-		if elapsed := time.Since(now); elapsed > 0 {
-			now = now.Add(elapsed)
-
-			if limit := op.Limit.Load(); limit > 0 {
-				todo := max(1, limit/secparts)
-				batch := min(1024, todo)
-				op.batch.Store(batch)
-				for todo >= batch && time.Since(now) < (interval-(interval/10)) {
+		if limit := op.Limit.Load(); limit > 0 {
+			todo := max(1, limit/secparts)
+			batch := min(1024, todo)
+			op.batch.Store(batch)
+		drive:
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- struct{}{}:
+					todo -= batch
 					todo += op.avail.Swap(0)
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- struct{}{}:
-						todo -= batch
-					default:
-						time.Sleep(interval / 10)
+					if todo < batch {
+						<-tckr.C
+						break drive
 					}
+				case <-tckr.C:
+					break drive
 				}
 			}
-
-			time.Sleep(interval - time.Since(now))
+			counts[seccount] = op.count.Swap(0)
 			seccount++
 			if seccount >= secparts {
 				seccount = 0
-				op.Rate.Store(op.count.Swap(0))
 			}
+			var rate int32
+			for i := 0; i < secparts; i++ {
+				rate += counts[i]
+			}
+			op.Rate.Store(rate)
 		}
 	}
 }
