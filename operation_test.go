@@ -41,20 +41,21 @@ func TestOperation_io_read_limit(t *testing.T) {
 	now := time.Now()
 
 	want := []byte("0123456789")
-	l.Reads.Limit.Store(1000)
+	l.Reads.Limit.Store(100)
 
 	r := bytes.NewReader(want)
-	buf := make([]byte, 100)
-	n, err := l.Reads.io(r.Read, buf)
+	got := make([]byte, 100)
+	n, err := l.Reads.io(r.Read, got)
 	if n != len(want) {
 		t.Error(n)
 	}
 	if err != nil {
 		t.Error(err)
 	}
-	buf = buf[:n]
-	if !bytes.Equal(buf, want) {
-		t.Error(string(buf), "!=", string(want))
+
+	got = got[:n]
+	if !bytes.Equal(got, want) {
+		t.Error(string(got), "!=", string(want))
 	}
 	if elapsed := time.Since(now); elapsed > interval*3 {
 		t.Error(elapsed)

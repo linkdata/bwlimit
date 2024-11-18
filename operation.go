@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+const secparts = 10
 const interval = time.Second / secparts
 
 type Operation struct {
@@ -27,7 +28,6 @@ func NewOperation(ctx context.Context, reader bool) (op *Operation) {
 }
 
 func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
-	var toSleep time.Duration
 	seccount := 0
 	now := time.Now()
 	defer close(ch)
@@ -35,25 +35,25 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 	for {
 		if elapsed := time.Since(now); elapsed > 0 {
 			now = now.Add(elapsed)
-			toSleep += interval - elapsed
 
 			if limit := op.Limit.Load(); limit > 0 {
-				todo := max(1, limit/secparts+op.avail.Swap(0))
+				todo := max(1, limit/secparts)
 				batch := min(1024, todo)
 				op.batch.Store(batch)
-				for todo >= batch {
-					todo -= batch
+				for todo >= batch && time.Since(now) < (interval-(interval/10)) {
+					todo += op.avail.Swap(0)
 					select {
-					case ch <- struct{}{}:
 					case <-ctx.Done():
 						return
+					case ch <- struct{}{}:
+						todo -= batch
 					default:
-						todo = 0
+						time.Sleep(interval / 10)
 					}
 				}
 			}
 
-			time.Sleep(toSleep)
+			time.Sleep(interval - time.Since(now))
 			seccount++
 			if seccount%secparts == 0 {
 				op.Rate.Store(op.count.Swap(0))

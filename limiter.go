@@ -9,8 +9,6 @@ type Limiter struct {
 	Writes *Operation
 }
 
-const secparts = 100
-
 func NewLimiter(ctx context.Context) *Limiter {
 	return &Limiter{
 		Reads:  NewOperation(ctx, true),
