@@ -72,9 +72,9 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
 			batch := int(op.batch.Load())
 			todo := min(len(b), batch)
 			done, err = fn(b[:todo])
-			op.avail.Add(int32(batch - done))
+			op.avail.Add(int32(batch - done)) // #nosec G115
 			if done > 0 {
-				op.count.Add(int32(done))
+				op.count.Add(int32(done)) // #nosec G115
 				n += done
 				b = b[done:]
 			}
