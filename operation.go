@@ -47,6 +47,8 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 					case ch <- struct{}{}:
 					case <-ctx.Done():
 						return
+					default:
+						todo = 0
 					}
 				}
 			}
@@ -63,7 +65,9 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) {
 	for len(b) > 0 && err == nil {
 		if op.Limit.Load() < 1 {
-			return fn(b)
+			n, err = fn(b)
+			op.count.Add(int32(n)) // #nosec G115
+			return
 		}
 		_, ok := <-op.ch
 		err = io.EOF
