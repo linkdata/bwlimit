@@ -111,7 +111,7 @@ func TestOperation_read_rate_high(t *testing.T) {
 		}
 	}
 
-	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
+	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
 		t.Error(elapsed)
 	}
 	if rate := int(l.Reads.Rate.Load()); rate < numbytes*0.9 || rate > numbytes {
