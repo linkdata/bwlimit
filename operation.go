@@ -9,6 +9,7 @@ import (
 
 const secparts = 10
 const interval = time.Second / secparts
+const batchsize = 4096
 
 type Operation struct {
 	Limit  atomic.Int32 // bandwith limit in bytes/sec
@@ -37,7 +38,7 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 	for {
 		if limit := op.Limit.Load(); limit > 0 {
 			todo := max(1, limit/secparts)
-			batch := min(1024, todo)
+			batch := min(batchsize, todo)
 			op.batch.Store(batch)
 		drive:
 			for {
