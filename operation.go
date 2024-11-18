@@ -28,9 +28,9 @@ func NewOperation(ctx context.Context, reader bool) (op *Operation) {
 }
 
 func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
+	defer close(ch)
 	seccount := 0
 	now := time.Now()
-	defer close(ch)
 
 	for {
 		if elapsed := time.Since(now); elapsed > 0 {
@@ -55,7 +55,8 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 
 			time.Sleep(interval - time.Since(now))
 			seccount++
-			if seccount%secparts == 0 {
+			if seccount >= secparts {
+				seccount = 0
 				op.Rate.Store(op.count.Swap(0))
 			}
 		}
