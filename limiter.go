@@ -28,5 +28,6 @@ func (l *Limiter) Wrap(fn DialContextFn) DialContextFn {
 	if fn == nil {
 		fn = DefaultNetDialer.DialContext
 	}
-	return Dialer{Limiter: l, DialContextFn: fn}.DialContextFn
+	d := &Dialer{DialContextFn: fn, Limiter: l}
+	return d.DialContext
 }
