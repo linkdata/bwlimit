@@ -16,13 +16,12 @@ type Operation struct {
 	Rate   atomic.Int64 // current rate in bytes/sec
 	avail  atomic.Int64
 	count  atomic.Int64
-	batch  atomic.Int64
-	ch     <-chan struct{}
+	ch     <-chan int
 	reader bool
 }
 
 func NewOperation(ctx context.Context, limits []int64, idx int) (op *Operation) {
-	ch := make(chan struct{}, secparts)
+	ch := make(chan int)
 	op = &Operation{ch: ch, reader: idx == 0}
 	var limit int64
 	if len(limits) > 0 {
@@ -36,7 +35,7 @@ func NewOperation(ctx context.Context, limits []int64, idx int) (op *Operation) 
 	return
 }
 
-func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
+func (op *Operation) run(ctx context.Context, ch chan<- int) {
 	defer close(ch)
 	seccount := 0
 	counts := make([]int64, secparts)
@@ -44,28 +43,32 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 	defer tckr.Stop()
 
 	for {
-		limit := op.Limit.Load()
-		todo := max(1, limit/secparts)
-		batch := min(batchsize, todo)
-		op.batch.Store(batch)
-	drive:
+		var limitCh chan<- int
+		var todo int
+		var batch int
+		if limit := op.Limit.Load(); limit > 0 {
+			limitCh = ch
+			todo = max(1, int(limit/secparts))
+			batch = min(batchsize, todo)
+		}
+
+	partialsecond:
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case ch <- struct{}{}:
-				if limit > 0 {
-					todo -= batch
-					todo += op.avail.Swap(0)
-					if todo < batch {
-						<-tckr.C
-						break drive
-					}
+			case limitCh <- batch:
+				todo -= batch
+				todo += int(op.avail.Swap(0))
+				if todo < batch {
+					<-tckr.C
+					break partialsecond
 				}
 			case <-tckr.C:
-				break drive
+				break partialsecond
 			}
 		}
+
 		counts[seccount] = op.count.Swap(0)
 		seccount++
 		if seccount >= secparts {
@@ -86,11 +89,10 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
 		return
 	}
 	for len(b) > 0 && err == nil {
-		_, ok := <-op.ch
+		batch, ok := <-op.ch
 		err = io.EOF
 		if ok {
 			var done int
-			batch := int(op.batch.Load())
 			todo := min(len(b), batch)
 			done, err = fn(b[:todo])
 			op.avail.Add(int64(batch - done))
