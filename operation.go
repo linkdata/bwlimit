@@ -12,11 +12,11 @@ const interval = time.Second / secparts
 const batchsize = 4096
 
 type Operation struct {
-	Limit  atomic.Int32 // bandwith limit in bytes/sec
-	Rate   atomic.Int32 // current rate in bytes/sec
-	avail  atomic.Int32
-	count  atomic.Int32
-	batch  atomic.Int32
+	Limit  atomic.Int64 // bandwith limit in bytes/sec
+	Rate   atomic.Int64 // current rate in bytes/sec
+	avail  atomic.Int64
+	count  atomic.Int64
+	batch  atomic.Int64
 	ch     <-chan struct{}
 	reader bool
 }
@@ -31,7 +31,7 @@ func NewOperation(ctx context.Context, reader bool) (op *Operation) {
 func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 	defer close(ch)
 	seccount := 0
-	counts := make([]int32, secparts)
+	counts := make([]int64, secparts)
 	tckr := time.NewTicker(interval)
 	defer tckr.Stop()
 
@@ -63,7 +63,7 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 		if seccount >= secparts {
 			seccount = 0
 		}
-		var rate int32
+		var rate int64
 		for i := 0; i < secparts; i++ {
 			rate += counts[i]
 		}
@@ -75,7 +75,7 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
 	for len(b) > 0 && err == nil {
 		if op.Limit.Load() < 1 {
 			n, err = fn(b)
-			op.count.Add(int32(n)) // #nosec G115
+			op.count.Add(int64(n))
 			return
 		}
 		_, ok := <-op.ch
@@ -85,9 +85,9 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
 			batch := int(op.batch.Load())
 			todo := min(len(b), batch)
 			done, err = fn(b[:todo])
-			op.avail.Add(int32(batch - done)) // #nosec G115
+			op.avail.Add(int64(batch - done))
 			if done > 0 {
-				op.count.Add(int32(done)) // #nosec G115
+				op.count.Add(int64(done))
 				n += done
 				b = b[done:]
 			}
