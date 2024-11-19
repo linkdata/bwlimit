@@ -36,37 +36,38 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 	defer tckr.Stop()
 
 	for {
-		if limit := op.Limit.Load(); limit > 0 {
-			todo := max(1, limit/secparts)
-			batch := min(batchsize, todo)
-			op.batch.Store(batch)
-		drive:
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- struct{}{}:
+		limit := op.Limit.Load()
+		todo := max(1, limit/secparts)
+		batch := min(batchsize, todo)
+		op.batch.Store(batch)
+	drive:
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- struct{}{}:
+				if limit > 0 {
 					todo -= batch
 					todo += op.avail.Swap(0)
 					if todo < batch {
 						<-tckr.C
 						break drive
 					}
-				case <-tckr.C:
-					break drive
 				}
+			case <-tckr.C:
+				break drive
 			}
-			counts[seccount] = op.count.Swap(0)
-			seccount++
-			if seccount >= secparts {
-				seccount = 0
-			}
-			var rate int32
-			for i := 0; i < secparts; i++ {
-				rate += counts[i]
-			}
-			op.Rate.Store(rate)
 		}
+		counts[seccount] = op.count.Swap(0)
+		seccount++
+		if seccount >= secparts {
+			seccount = 0
+		}
+		var rate int32
+		for i := 0; i < secparts; i++ {
+			rate += counts[i]
+		}
+		op.Rate.Store(rate)
 	}
 }
 

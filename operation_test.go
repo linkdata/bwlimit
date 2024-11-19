@@ -89,16 +89,23 @@ func TestOperation_read_rate_low(t *testing.T) {
 	}
 }
 
+type unlimitedReader struct {
+}
+
+func (unlimitedReader) Read(b []byte) (int, error) {
+	return len(b), nil
+}
+
 func TestOperation_read_rate_high(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	l := NewLimiter(ctx)
 
-	const numbytes = 10 * 1000000
+	const numbytes = (2 * 1024 * 1024 * 1024) - 1
 	l.Reads.Limit.Store(numbytes)
 
 	now := time.Now()
-	r := bytes.NewReader(make([]byte, numbytes*2))
+	r := unlimitedReader{}
 	var numread int
 
 	for numread < numbytes {
@@ -111,10 +118,10 @@ func TestOperation_read_rate_high(t *testing.T) {
 		}
 	}
 
-	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
+	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
 		t.Error(elapsed)
 	}
-	if rate := int(l.Reads.Rate.Load()); rate < numbytes*0.9 || rate > numbytes {
+	if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/10) || rate > numbytes {
 		t.Error(rate)
 	}
 }

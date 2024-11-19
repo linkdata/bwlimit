@@ -14,7 +14,8 @@ func TestDialer_Dial(t *testing.T) {
 	l := NewLimiter(ctx)
 
 	d := &Dialer{
-		Limiter: l,
+		DialContextFn: l.Wrap(nil),
+		Limiter:       l,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
