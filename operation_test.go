@@ -92,9 +92,7 @@ func TestOperation_io_read_limit(t *testing.T) {
 func TestOperation_read_rate_low(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	l := NewLimiter(ctx)
-
-	l.Reads.Limit.Store(1000) // 10 bytes @ 1000/sec
+	l := NewLimiter(ctx, 1000)
 
 	now := time.Now()
 	r := bytes.NewReader(make([]byte, 2000))
@@ -109,6 +107,7 @@ func TestOperation_read_rate_low(t *testing.T) {
 	}
 
 	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
+		t.Log(l.Reads.Limit.Load())
 		t.Error(elapsed)
 	}
 	if rate := int(l.Reads.Rate.Load()); rate < 990 || rate > 1000 {
@@ -119,10 +118,8 @@ func TestOperation_read_rate_low(t *testing.T) {
 func TestOperation_read_rate_high(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	l := NewLimiter(ctx)
-
 	const numbytes = (2 * 1024 * 1024 * 1024) - 1
-	l.Reads.Limit.Store(numbytes)
+	l := NewLimiter(ctx, numbytes)
 
 	now := time.Now()
 	r := &unlimitedReader{}
@@ -158,8 +155,8 @@ func TestOperation_read_rate_high(t *testing.T) {
 func TestOperation_write_rate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	l := NewLimiter(ctx)
-	l.Writes.Limit.Store(1000000)
+
+	l := NewLimiter(ctx, 1000000)
 
 	buf := make([]byte, 10000)
 

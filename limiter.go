@@ -15,10 +15,12 @@ type Limiter struct {
 	Writes *Operation
 }
 
-func NewLimiter(ctx context.Context) *Limiter {
+// NewLimiter returns a new limiter. If you provide limits, the first will set
+// both read and write limits, the second will set the write limit.
+func NewLimiter(ctx context.Context, limits ...int64) *Limiter {
 	return &Limiter{
-		Reads:  NewOperation(ctx, true),
-		Writes: NewOperation(ctx, false),
+		Reads:  NewOperation(ctx, limits, 0),
+		Writes: NewOperation(ctx, limits, 1),
 	}
 }
 

@@ -21,9 +21,17 @@ type Operation struct {
 	reader bool
 }
 
-func NewOperation(ctx context.Context, reader bool) (op *Operation) {
+func NewOperation(ctx context.Context, limits []int64, idx int) (op *Operation) {
 	ch := make(chan struct{}, secparts)
-	op = &Operation{ch: ch, reader: reader}
+	op = &Operation{ch: ch, reader: idx == 0}
+	var limit int64
+	if len(limits) > 0 {
+		limit = limits[0]
+		if len(limits) > idx {
+			limit = limits[idx]
+		}
+	}
+	op.Limit.Store(limit)
 	go op.run(ctx, ch)
 	return
 }
