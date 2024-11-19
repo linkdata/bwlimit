@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 )
@@ -127,7 +128,7 @@ func TestOperation_read_rate_high(t *testing.T) {
 		if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/10) || rate > numbytes {
 			t.Error(rate)
 		}
-	} else if !errors.Is(err, context.Canceled) {
+	} else if !errors.Is(err, io.EOF) {
 		t.Error(err)
 	}
 }
