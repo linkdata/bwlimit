@@ -9,29 +9,46 @@ import (
 	"time"
 )
 
+type unlimitedReader struct {
+	x byte
+}
+
+func (ur *unlimitedReader) Read(b []byte) (int, error) {
+	x := ur.x
+	for i := range b {
+		b[i] = x
+		x++
+	}
+	ur.x = x
+	return len(b), nil
+}
+
 func TestOperation_io_read_nolimit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	l := NewLimiter(ctx)
 
-	want := []byte("some text")
+	r := &unlimitedReader{}
 
-	now := time.Now()
-	r := bytes.NewReader(want)
-	buf := make([]byte, 100)
-	n, err := l.Reads.io(r.Read, buf)
-	if n != len(want) {
-		t.Error(n)
+	const numbytes = 10*1024*1024 + 1
+	var numread int
+	var err error
+	var x byte
+	buf := make([]byte, 1024)
+	for numread < numbytes && err == nil {
+		var n int
+		n, err = l.Reads.io(r.Read, buf[:(cap(buf)-numread%101)])
+		for i := range buf[:n] {
+			if buf[i] != x {
+				t.Fatal(numread, x)
+			}
+			x++
+			numread++
+		}
 	}
+
 	if err != nil {
 		t.Error(err)
-	}
-	buf = buf[:n]
-	if !bytes.Equal(buf, want) {
-		t.Error(string(buf), "!=", string(want))
-	}
-	if elapsed := time.Since(now); elapsed > interval*2 {
-		t.Error(elapsed)
 	}
 }
 
@@ -47,7 +64,15 @@ func TestOperation_io_read_limit(t *testing.T) {
 
 	r := bytes.NewReader(want)
 	got := make([]byte, 100)
-	n, err := l.Reads.io(r.Read, got)
+	n, err := l.Reads.io(r.Read, got[:0])
+	if n != 0 {
+		t.Error(n)
+	}
+	if err != nil {
+		t.Error(err)
+	}
+
+	n, err = l.Reads.io(r.Read, got)
 	if n != len(want) {
 		t.Error(n)
 	}
@@ -91,15 +116,8 @@ func TestOperation_read_rate_low(t *testing.T) {
 	}
 }
 
-type unlimitedReader struct {
-}
-
-func (unlimitedReader) Read(b []byte) (int, error) {
-	return len(b), nil
-}
-
 func TestOperation_read_rate_high(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	l := NewLimiter(ctx)
 
@@ -107,20 +125,24 @@ func TestOperation_read_rate_high(t *testing.T) {
 	l.Reads.Limit.Store(numbytes)
 
 	now := time.Now()
-	r := unlimitedReader{}
+	r := &unlimitedReader{}
 
 	var numread int
 	var err error
-
+	var x byte
 	buf := make([]byte, 1024*1024)
 	for numread < numbytes && err == nil {
 		var n int
-		n, err = l.Reads.io(r.Read, buf)
-		numread += n
+		n, err = l.Reads.io(r.Read, buf[:(cap(buf)-numread%101)])
+		for i := range buf[:n] {
+			if buf[i] != x {
+				t.Fatal(numread, x)
+			}
+			x++
+			numread++
+		}
 	}
-	if numread < numbytes {
-		t.Log("read", numread, "missing", numbytes-numread)
-	}
+	t.Log("high rate numread", numread)
 	if err == nil {
 		if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
 			t.Error(elapsed)
