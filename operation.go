@@ -80,12 +80,12 @@ func (op *Operation) run(ctx context.Context, ch chan<- struct{}) {
 }
 
 func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) {
+	if op.Limit.Load() < 1 {
+		n, err = fn(b)
+		op.count.Add(int64(n))
+		return
+	}
 	for len(b) > 0 && err == nil {
-		if op.Limit.Load() < 1 {
-			n, err = fn(b)
-			op.count.Add(int64(n))
-			return
-		}
 		_, ok := <-op.ch
 		err = io.EOF
 		if ok {
