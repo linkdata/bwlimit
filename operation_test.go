@@ -26,15 +26,17 @@ func (ur *unlimitedReader) Read(b []byte) (int, error) {
 func TestOperation_io_read_nolimit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	l := NewLimiter(ctx)
+	const numbytes = (2 * 1024 * 1024 * 1024) - 1
 
+	l := NewLimiter(ctx)
 	r := &unlimitedReader{}
 
-	const numbytes = 10*1024*1024 + 1
 	var numread int
 	var err error
 	var x byte
-	buf := make([]byte, 1024)
+	buf := make([]byte, 1024*1024)
+
+	now := time.Now()
 	for numread < numbytes && err == nil {
 		var n int
 		n, err = l.Reads.io(r.Read, buf[:(cap(buf)-numread%101)])
@@ -45,7 +47,13 @@ func TestOperation_io_read_nolimit(t *testing.T) {
 			x++
 			numread++
 		}
+		if err == nil && ctx.Err() != nil {
+			// unlimited reads won't check limiter context
+			break
+		}
 	}
+	elapsed := time.Since(now)
+	t.Log("no limit numread", numread, "should be close to", (numread*int(time.Second))/(int(elapsed)))
 
 	if err != nil {
 		t.Error(err)
@@ -121,13 +129,14 @@ func TestOperation_read_rate_high(t *testing.T) {
 	const numbytes = (2 * 1024 * 1024 * 1024) - 1
 	l := NewLimiter(ctx, numbytes)
 
-	now := time.Now()
 	r := &unlimitedReader{}
 
 	var numread int
 	var err error
 	var x byte
 	buf := make([]byte, 1024*1024)
+
+	now := time.Now()
 	for numread < numbytes && err == nil {
 		var n int
 		n, err = l.Reads.io(r.Read, buf[:(cap(buf)-numread%101)])
@@ -139,9 +148,11 @@ func TestOperation_read_rate_high(t *testing.T) {
 			numread++
 		}
 	}
-	t.Log("high rate numread", numread)
+	elapsed := time.Since(now)
+	t.Log("high rate numread", numread, "should be close to", (numread*int(time.Second))/(int(elapsed)))
+
 	if err == nil {
-		if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
+		if elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
 			t.Error(elapsed)
 		}
 		if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/10) || rate > numbytes {
