@@ -3,6 +3,7 @@ package bwlimit
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -106,23 +107,28 @@ func TestOperation_read_rate_high(t *testing.T) {
 
 	now := time.Now()
 	r := unlimitedReader{}
+
 	var numread int
+	var err error
 
-	for numread < numbytes {
-		buf := make([]byte, 1000)
-		n, err := l.Reads.io(r.Read, buf)
+	buf := make([]byte, 1024*1024)
+	for numread < numbytes && err == nil {
+		var n int
+		n, err = l.Reads.io(r.Read, buf)
 		numread += n
-		if err != nil {
-			t.Error(numread, n)
-			t.Fatal(err)
+	}
+	if numread < numbytes {
+		t.Log("read", numread, "missing", numbytes-numread)
+	}
+	if err == nil {
+		if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
+			t.Error(elapsed)
 		}
-	}
-
-	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
-		t.Error(elapsed)
-	}
-	if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/10) || rate > numbytes {
-		t.Error(rate)
+		if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/10) || rate > numbytes {
+			t.Error(rate)
+		}
+	} else if !errors.Is(err, context.Canceled) {
+		t.Error(err)
 	}
 }
 

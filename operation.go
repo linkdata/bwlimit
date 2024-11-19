@@ -79,7 +79,7 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
 			return
 		}
 		_, ok := <-op.ch
-		err = io.EOF
+		err = context.Canceled // if the channel is closed it means the Limiter context was cancelled
 		if ok {
 			var done int
 			batch := int(op.batch.Load())
