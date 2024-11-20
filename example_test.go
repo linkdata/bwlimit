@@ -19,6 +19,7 @@ func ExampleLimiter_NewLimiter() {
 
 	// limit reads to 100 bytes/sec, unlimited writes
 	lim := bwlimit.NewLimiter(100, 0)
+	defer lim.Stop()
 
 	// wrap the default http transport DialContext
 	tp := http.DefaultTransport.(*http.Transport)
