@@ -103,18 +103,18 @@ func TestOperation_read_rate_low(t *testing.T) {
 	buf := make([]byte, 1001)
 
 	var tickCount atomic.Int32
-	oldOnTick := Ticker.GetOnTick()
-	defer Ticker.SetOnTick(oldOnTick)
-	<-Ticker.TickCh()
-	Ticker.SetOnTick(func() { tickCount.Add(1) })
+	oldOnTick := DefaultTicker.GetOnTick()
+	defer DefaultTicker.SetOnTick(oldOnTick)
+	<-DefaultTicker.Ch()
+	DefaultTicker.SetOnTick(func() { tickCount.Add(1) })
 
-	<-Ticker.TickCh()
+	<-DefaultTicker.Ch()
 	// should read in batches of 1000/secparts (=100) bytes
 	now := time.Now()
 	n, err := l.Reads.io(r.Read, buf)
 	elapsed := time.Since(now)
 	rate := l.Reads.Rate.Load()
-	<-Ticker.TickCh()
+	<-DefaultTicker.Ch()
 
 	if n := tickCount.Load(); n < 11 || n > 13 {
 		t.Error(n)

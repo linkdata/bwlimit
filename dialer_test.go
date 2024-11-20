@@ -34,10 +34,10 @@ func TestDialer_Dial(t *testing.T) {
 			Dial: d2.Dial,
 		},
 	}
-	<-Ticker.TickCh()
+	<-DefaultTicker.Ch()
 	resp1, err1 := client1.Get(srv.URL)
 	resp2, err2 := client2.Get(srv.URL)
-	<-Ticker.TickCh()
+	<-DefaultTicker.Ch()
 
 	if err1 != nil {
 		t.Fatal(err1)

@@ -71,7 +71,7 @@ func (op *Operation) run(ch chan<- int) {
 				todo = max(1, int(limit/secparts))
 				batch = min(batchsize, todo)
 			}
-			tickCh := Ticker.TickCh()
+			tickCh := DefaultTicker.Ch()
 
 		partialsecond:
 			for {

@@ -10,19 +10,18 @@ type DialContextFn func(ctx context.Context, network string, address string) (ne
 var DefaultNetDialer = &net.Dialer{}
 
 type Limiter struct {
+	*Ticker
 	Reads  *Operation
 	Writes *Operation
 }
 
-// NewLimiter returns a new limiter. If you provide limits, the first will set
+// NewLimiter returns a new limiter from DefaultTicker.
+// If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
 //
-// To stop the limiter and free it's resources, call Stop.
+// To stop the Limiter and free it's resources, call Stop.
 func NewLimiter(limits ...int64) *Limiter {
-	return &Limiter{
-		Reads:  NewOperation(limits, 0),
-		Writes: NewOperation(limits, 1),
-	}
+	return DefaultTicker.NewLimiter(limits...)
 }
 
 // Stop stops the Limiter and frees any resources. Reads and writes on
