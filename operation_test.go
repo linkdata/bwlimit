@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -63,21 +64,23 @@ func TestOperation_io_read_nolimit(t *testing.T) {
 func TestOperation_io_read_limit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	l := NewLimiter(ctx)
-
-	now := time.Now()
+	l := NewLimiter(ctx, 100)
 
 	want := []byte("0123456789")
-	l.Reads.Limit.Store(100)
-
 	r := bytes.NewReader(want)
 	got := make([]byte, 100)
+
+	// reading zero bytes returns immediately
+	now := time.Now()
 	n, err := l.Reads.io(r.Read, got[:0])
 	if n != 0 {
 		t.Error(n)
 	}
 	if err != nil {
 		t.Error(err)
+	}
+	if elapsed := time.Since(now); elapsed > interval/2 {
+		t.Error("too slow", elapsed)
 	}
 
 	n, err = l.Reads.io(r.Read, got)
@@ -92,7 +95,7 @@ func TestOperation_io_read_limit(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Error(string(got), "!=", string(want))
 	}
-	if elapsed := time.Since(now); elapsed > interval*3 {
+	if elapsed := time.Since(now); elapsed > interval*2 {
 		t.Error(elapsed)
 	}
 }
@@ -101,12 +104,26 @@ func TestOperation_read_rate_low(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	l := NewLimiter(ctx, 1000)
-
-	now := time.Now()
 	r := bytes.NewReader(make([]byte, 2000))
 	buf := make([]byte, 1001)
-	n, err := l.Reads.io(r.Read, buf)
 
+	var tickCount atomic.Int32
+	oldOnTick := Ticker.GetOnTick()
+	defer Ticker.SetOnTick(oldOnTick)
+	<-Ticker.TickCh()
+	Ticker.SetOnTick(func() { tickCount.Add(1) })
+
+	<-Ticker.TickCh()
+	// should read in batches of 1000/secparts (=100) bytes
+	now := time.Now()
+	n, err := l.Reads.io(r.Read, buf)
+	elapsed := time.Since(now)
+	rate := l.Reads.Rate.Load()
+	<-Ticker.TickCh()
+
+	if n := tickCount.Load(); n < 11 || n > 13 {
+		t.Error(n)
+	}
 	if n < 990 || n > 1010 {
 		t.Error(n)
 	}
@@ -114,11 +131,11 @@ func TestOperation_read_rate_low(t *testing.T) {
 		t.Error(err)
 	}
 
-	if elapsed := time.Since(now); elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
+	if elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
 		t.Log(l.Reads.Limit.Load())
 		t.Error(elapsed)
 	}
-	if rate := int(l.Reads.Rate.Load()); rate < 990 || rate > 1000 {
+	if rate < 990 || rate > 1000 {
 		t.Error(rate)
 	}
 }

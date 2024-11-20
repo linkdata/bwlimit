@@ -14,6 +14,7 @@ const batchsize = 4096
 type Operation struct {
 	Limit  atomic.Int64 // bandwith limit in bytes/sec
 	Rate   atomic.Int64 // current rate in bytes/sec
+	Count  atomic.Int64 // number of bytes seen
 	avail  atomic.Int64
 	count  atomic.Int64
 	ch     <-chan int
@@ -39,8 +40,6 @@ func (op *Operation) run(ctx context.Context, ch chan<- int) {
 	defer close(ch)
 	seccount := 0
 	counts := make([]int64, secparts)
-	tckr := time.NewTicker(interval)
-	defer tckr.Stop()
 
 	for {
 		var limitCh chan<- int
@@ -51,6 +50,7 @@ func (op *Operation) run(ctx context.Context, ch chan<- int) {
 			todo = max(1, int(limit/secparts))
 			batch = min(batchsize, todo)
 		}
+		tickCh := Ticker.TickCh()
 
 	partialsecond:
 		for {
@@ -61,15 +61,17 @@ func (op *Operation) run(ctx context.Context, ch chan<- int) {
 				todo -= batch
 				todo += int(op.avail.Swap(0))
 				if todo < batch {
-					<-tckr.C
+					<-tickCh
 					break partialsecond
 				}
-			case <-tckr.C:
+			case <-tickCh:
 				break partialsecond
 			}
 		}
 
-		counts[seccount] = op.count.Swap(0)
+		count := op.count.Swap(0)
+		op.Count.Add(count)
+		counts[seccount] = count
 		seccount++
 		if seccount >= secparts {
 			seccount = 0
