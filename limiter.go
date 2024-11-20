@@ -5,7 +5,6 @@ import (
 	"net"
 )
 
-type DialFn func(network string, address string) (net.Conn, error)
 type DialContextFn func(ctx context.Context, network string, address string) (net.Conn, error)
 
 var DefaultNetDialer = &net.Dialer{}
@@ -17,6 +16,8 @@ type Limiter struct {
 
 // NewLimiter returns a new limiter. If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
+//
+// To stop the limiter and free it's resources, call Stop.
 func NewLimiter(limits ...int64) *Limiter {
 	return &Limiter{
 		Reads:  NewOperation(limits, 0),
@@ -24,6 +25,9 @@ func NewLimiter(limits ...int64) *Limiter {
 	}
 }
 
+// Stop stops the Limiter and frees any resources. Reads and writes on
+// a stopped and rate-limited Limiter returns io.EOF. On an unlimited
+// Limiter they function as normal.
 func (l *Limiter) Stop() {
 	l.Reads.Stop()
 	l.Writes.Stop()
