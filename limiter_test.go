@@ -21,7 +21,7 @@ func TestLimiter_Stop(t *testing.T) {
 		t.Error(n)
 	}
 	l.Stop()
-	<-DefaultTicker.Ch()
+	<-l.WaitCh()
 
 	n, err = l.Reads.io(r.Read, buf)
 	if err != io.EOF {

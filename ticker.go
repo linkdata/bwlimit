@@ -5,12 +5,10 @@ import (
 	"time"
 )
 
-// A Ticker synchronizes rate calculation among multiple Limiters and
-// provides the on-tick callback.
+// A Ticker synchronizes rate calculation among multiple Limiters.
 type Ticker struct {
 	mu sync.Mutex
 	ch chan struct{}
-	fn func()
 }
 
 var DefaultTicker *Ticker
@@ -20,28 +18,17 @@ var DefaultTicker *Ticker
 // both read and write limits, the second will set the write limit.
 //
 // To stop the limiter and free it's resources, call Stop.
-func (ot *Ticker) NewLimiter(limits ...int64) *Limiter {
+func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) {
 	return &Limiter{
 		Ticker: ot,
-		Reads:  NewOperation(limits, 0),
-		Writes: NewOperation(limits, 1),
+		Reads:  NewOperation(ot, limits, 0),
+		Writes: NewOperation(ot, limits, 1),
 	}
 }
 
-func (ot *Ticker) SetOnTick(fn func()) {
-	ot.mu.Lock()
-	ot.fn = fn
-	ot.mu.Unlock()
-}
-
-func (ot *Ticker) GetOnTick() (fn func()) {
-	ot.mu.Lock()
-	fn = ot.fn
-	ot.mu.Unlock()
-	return
-}
-
-func (ot *Ticker) Ch() (ch <-chan struct{}) {
+// WaitCh returns a channel that will close when the current rate limit
+// time slice runs out.
+func (ot *Ticker) WaitCh() (ch <-chan struct{}) {
 	ot.mu.Lock()
 	ch = ot.ch
 	ot.mu.Unlock()
@@ -63,19 +50,9 @@ func (ot *Ticker) run() {
 	}
 }
 
-func (ot *Ticker) runOnTick() {
-	for {
-		<-ot.Ch()
-		if fn := ot.GetOnTick(); fn != nil {
-			fn()
-		}
-	}
-}
-
 func init() {
 	DefaultTicker = &Ticker{
 		ch: make(chan struct{}),
 	}
 	go DefaultTicker.run()
-	go DefaultTicker.runOnTick()
 }

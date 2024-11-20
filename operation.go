@@ -12,20 +12,22 @@ const interval = time.Second / secparts
 const batchsize = 4096
 
 type Operation struct {
-	Limit  atomic.Int64 // bandwith limit in bytes/sec
-	Rate   atomic.Int64 // current rate in bytes/sec
-	Count  atomic.Int64 // number of bytes seen
-	avail  atomic.Int64
-	count  atomic.Int64
-	ch     <-chan int
-	reader bool
-	mu     sync.Mutex // protects following
-	stopCh chan struct{}
+	*Ticker              // Ticker we belong to
+	Limit   atomic.Int64 // bandwith limit in bytes/sec
+	Rate    atomic.Int64 // current rate in bytes/sec
+	Count   atomic.Int64 // number of bytes seen
+	avail   atomic.Int64
+	count   atomic.Int64
+	ch      <-chan int
+	reader  bool
+	mu      sync.Mutex // protects following
+	stopCh  chan struct{}
 }
 
-func NewOperation(limits []int64, idx int) (op *Operation) {
+func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) {
 	ch := make(chan int)
 	op = &Operation{
+		Ticker: t,
 		ch:     ch,
 		stopCh: make(chan struct{}),
 		reader: idx == 0,
@@ -71,7 +73,7 @@ func (op *Operation) run(ch chan<- int) {
 				todo = max(1, int(limit/secparts))
 				batch = min(batchsize, todo)
 			}
-			tickCh := DefaultTicker.Ch()
+			waitCh := op.WaitCh()
 
 		partialsecond:
 			for {
@@ -82,10 +84,10 @@ func (op *Operation) run(ch chan<- int) {
 					todo -= batch
 					todo += int(op.avail.Swap(0))
 					if todo < batch {
-						<-tickCh
+						<-waitCh
 						break partialsecond
 					}
-				case <-tickCh:
+				case <-waitCh:
 					break partialsecond
 				}
 			}
