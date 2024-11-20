@@ -2,7 +2,6 @@ package bwlimit
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"sync/atomic"
@@ -25,11 +24,10 @@ func (ur *unlimitedReader) Read(b []byte) (int, error) {
 }
 
 func TestOperation_io_read_nolimit(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 	const numbytes = (2 * 1024 * 1024 * 1024) - 1
 
-	l := NewLimiter(ctx)
+	l := NewLimiter()
+	defer l.Stop()
 	r := &unlimitedReader{}
 
 	var numread int
@@ -48,8 +46,7 @@ func TestOperation_io_read_nolimit(t *testing.T) {
 			x++
 			numread++
 		}
-		if err == nil && ctx.Err() != nil {
-			// unlimited reads won't check limiter context
+		if err == nil && time.Since(now) > time.Second {
 			break
 		}
 	}
@@ -62,9 +59,8 @@ func TestOperation_io_read_nolimit(t *testing.T) {
 }
 
 func TestOperation_io_read_limit(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	l := NewLimiter(ctx, 100)
+	l := NewLimiter(100)
+	defer l.Stop()
 
 	want := []byte("0123456789")
 	r := bytes.NewReader(want)
@@ -101,9 +97,8 @@ func TestOperation_io_read_limit(t *testing.T) {
 }
 
 func TestOperation_read_rate_low(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-	defer cancel()
-	l := NewLimiter(ctx, 1000)
+	l := NewLimiter(1000)
+	defer l.Stop()
 	r := bytes.NewReader(make([]byte, 2000))
 	buf := make([]byte, 1001)
 
@@ -141,10 +136,9 @@ func TestOperation_read_rate_low(t *testing.T) {
 }
 
 func TestOperation_read_rate_high(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 	const numbytes = (2 * 1024 * 1024 * 1024) - 1
-	l := NewLimiter(ctx, numbytes)
+	l := NewLimiter(numbytes)
+	defer l.Stop()
 
 	r := &unlimitedReader{}
 
@@ -152,6 +146,11 @@ func TestOperation_read_rate_high(t *testing.T) {
 	var err error
 	var x byte
 	buf := make([]byte, 1024*1024)
+
+	go func() {
+		<-time.NewTimer(time.Second).C
+		l.Stop()
+	}()
 
 	now := time.Now()
 	for numread < numbytes && err == nil {
@@ -181,10 +180,8 @@ func TestOperation_read_rate_high(t *testing.T) {
 }
 
 func TestOperation_write_rate(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-	defer cancel()
-
-	l := NewLimiter(ctx, 1000000)
+	l := NewLimiter(1000000)
+	defer l.Stop()
 
 	buf := make([]byte, 10000)
 
@@ -197,12 +194,10 @@ func TestOperation_write_rate(t *testing.T) {
 		t.Error(err)
 	}
 
+	now := time.Now()
 	rate := l.Writes.Rate.Load()
-	for rate == 0 && ctx.Err() == nil {
+	for rate == 0 && time.Since(now) < time.Second {
 		rate = l.Writes.Rate.Load()
-	}
-	if ctx.Err() != nil {
-		t.Fatal(ctx.Err())
 	}
 	if rate != 10 {
 		t.Error(rate)

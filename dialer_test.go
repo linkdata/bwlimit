@@ -1,18 +1,16 @@
 package bwlimit
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 func TestDialer_Dial(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	l1 := NewLimiter(ctx)
-	l2 := NewLimiter(ctx)
+	l1 := NewLimiter()
+	defer l1.Stop()
+	l2 := NewLimiter()
+	defer l2.Stop()
 
 	d1 := &Dialer{
 		DialContextFn: l1.Wrap(nil),

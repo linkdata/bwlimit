@@ -17,11 +17,16 @@ type Limiter struct {
 
 // NewLimiter returns a new limiter. If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
-func NewLimiter(ctx context.Context, limits ...int64) *Limiter {
+func NewLimiter(limits ...int64) *Limiter {
 	return &Limiter{
-		Reads:  NewOperation(ctx, limits, 0),
-		Writes: NewOperation(ctx, limits, 1),
+		Reads:  NewOperation(limits, 0),
+		Writes: NewOperation(limits, 1),
 	}
+}
+
+func (l *Limiter) Stop() {
+	l.Reads.Stop()
+	l.Writes.Stop()
 }
 
 // Wrap returns a DialContextFn using the given fn that is bandwidth limited by this Limiter.

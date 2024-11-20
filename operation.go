@@ -1,8 +1,8 @@
 package bwlimit
 
 import (
-	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -19,11 +19,17 @@ type Operation struct {
 	count  atomic.Int64
 	ch     <-chan int
 	reader bool
+	mu     sync.Mutex // protects following
+	stopCh chan struct{}
 }
 
-func NewOperation(ctx context.Context, limits []int64, idx int) (op *Operation) {
+func NewOperation(limits []int64, idx int) (op *Operation) {
 	ch := make(chan int)
-	op = &Operation{ch: ch, reader: idx == 0}
+	op = &Operation{
+		ch:     ch,
+		stopCh: make(chan struct{}),
+		reader: idx == 0,
+	}
 	var limit int64
 	if len(limits) > 0 {
 		limit = limits[0]
@@ -32,55 +38,71 @@ func NewOperation(ctx context.Context, limits []int64, idx int) (op *Operation) 
 		}
 	}
 	op.Limit.Store(limit)
-	go op.run(ctx, ch)
+	go op.run(ch)
 	return
 }
 
-func (op *Operation) run(ctx context.Context, ch chan<- int) {
+func (op *Operation) Stop() {
+	op.mu.Lock()
+	ch := op.stopCh
+	op.stopCh = nil
+	op.mu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
+}
+
+func (op *Operation) run(ch chan<- int) {
 	defer close(ch)
+
+	op.mu.Lock()
+	stopCh := op.stopCh
 	seccount := 0
 	counts := make([]int64, secparts)
+	op.mu.Unlock()
 
-	for {
-		var limitCh chan<- int
-		var todo int
-		var batch int
-		if limit := op.Limit.Load(); limit > 0 {
-			limitCh = ch
-			todo = max(1, int(limit/secparts))
-			batch = min(batchsize, todo)
-		}
-		tickCh := Ticker.TickCh()
-
-	partialsecond:
+	if stopCh != nil {
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			case limitCh <- batch:
-				todo -= batch
-				todo += int(op.avail.Swap(0))
-				if todo < batch {
-					<-tickCh
+			var limitCh chan<- int
+			var todo int
+			var batch int
+			if limit := op.Limit.Load(); limit > 0 {
+				limitCh = ch
+				todo = max(1, int(limit/secparts))
+				batch = min(batchsize, todo)
+			}
+			tickCh := Ticker.TickCh()
+
+		partialsecond:
+			for {
+				select {
+				case <-stopCh:
+					return
+				case limitCh <- batch:
+					todo -= batch
+					todo += int(op.avail.Swap(0))
+					if todo < batch {
+						<-tickCh
+						break partialsecond
+					}
+				case <-tickCh:
 					break partialsecond
 				}
-			case <-tickCh:
-				break partialsecond
 			}
-		}
 
-		count := op.count.Swap(0)
-		op.Count.Add(count)
-		counts[seccount] = count
-		seccount++
-		if seccount >= secparts {
-			seccount = 0
+			count := op.count.Swap(0)
+			op.Count.Add(count)
+			counts[seccount] = count
+			seccount++
+			if seccount >= secparts {
+				seccount = 0
+			}
+			var rate int64
+			for i := 0; i < secparts; i++ {
+				rate += counts[i]
+			}
+			op.Rate.Store(rate)
 		}
-		var rate int64
-		for i := 0; i < secparts; i++ {
-			rate += counts[i]
-		}
-		op.Rate.Store(rate)
 	}
 }
 

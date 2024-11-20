@@ -1,17 +1,14 @@
 package bwlimit
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 func TestListener_Accept(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	l := NewLimiter(ctx)
+	l := NewLimiter()
+	defer l.Stop()
 
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
