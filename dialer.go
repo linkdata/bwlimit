@@ -6,12 +6,12 @@ import (
 )
 
 type Dialer struct {
-	DialContextFn // DialContext function we wrap
+	ContextDialer // ContextDialer we wrap
 	*Limiter      // Limiter to use
 }
 
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (conn net.Conn, err error) {
-	if conn, err = d.DialContextFn(ctx, network, address); err == nil {
+	if conn, err = d.ContextDialer.DialContext(ctx, network, address); err == nil {
 		conn = &Conn{
 			Conn:    conn,
 			Limiter: d.Limiter,

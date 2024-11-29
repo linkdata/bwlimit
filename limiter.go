@@ -1,11 +1,8 @@
 package bwlimit
 
 import (
-	"context"
 	"net"
 )
-
-type DialContextFn func(ctx context.Context, network string, address string) (net.Conn, error)
 
 var DefaultNetDialer = &net.Dialer{}
 
@@ -32,12 +29,31 @@ func (l *Limiter) Stop() {
 	l.Writes.Stop()
 }
 
-// Wrap returns a DialContextFn using the given fn that is bandwidth limited by this Limiter.
-// If fn is nil we use DefaultNetDialer.DialContext.
-func (l *Limiter) Wrap(fn DialContextFn) DialContextFn {
-	if fn == nil {
-		fn = DefaultNetDialer.DialContext
+// alreadyLimits returns true if cd is already limited by this Limiter.
+// This lets us help the user avoiding double-accounting bandwidth.
+func (l *Limiter) alreadyLimits(cd ContextDialer) bool {
+	for {
+		if d, ok := cd.(*Dialer); ok {
+			if d.Limiter == l {
+				return true
+			}
+			cd = d.ContextDialer
+		} else {
+			return false
+		}
 	}
-	d := &Dialer{DialContextFn: fn, Limiter: l}
-	return d.DialContext
+}
+
+// Wrap returns a ContextDialer wrapping cd that is bandwidth limited by this Limiter.
+//
+// If cd is nil we use DefaultNetDialer. If cd is already limited by this Limiter, cd
+// is returned unchanged.
+func (l *Limiter) Wrap(cd ContextDialer) ContextDialer {
+	if cd == nil {
+		cd = DefaultNetDialer
+	}
+	if l.alreadyLimits(cd) {
+		return cd
+	}
+	return &Dialer{ContextDialer: cd, Limiter: l}
 }

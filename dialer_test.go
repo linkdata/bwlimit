@@ -13,12 +13,12 @@ func TestDialer_Dial(t *testing.T) {
 	defer l2.Stop()
 
 	d1 := &Dialer{
-		DialContextFn: l1.Wrap(nil),
 		Limiter:       l1,
+		ContextDialer: l1.Wrap(nil),
 	}
 	d2 := &Dialer{
-		DialContextFn: l2.Wrap(d1.DialContext),
 		Limiter:       l2,
+		ContextDialer: l2.Wrap(d1),
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))

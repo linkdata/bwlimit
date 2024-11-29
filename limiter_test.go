@@ -31,3 +31,14 @@ func TestLimiter_Stop(t *testing.T) {
 		t.Error(n)
 	}
 }
+
+func TestLimiter_double_Wrap(t *testing.T) {
+	l := NewLimiter()
+	defer l.Stop()
+
+	d1 := l.Wrap(nil)
+	d2 := l.Wrap(d1)
+	if d1 != d2 {
+		t.Error(d1, d2)
+	}
+}
