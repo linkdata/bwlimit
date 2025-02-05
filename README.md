@@ -36,9 +36,9 @@ func main() {
 	lim := bwlimit.NewLimiter(100, 0)
 	defer lim.Stop()
 
-	// wrap the default http transport DialContext
+	// set the default http transport DialContext
 	tp := http.DefaultTransport.(*http.Transport)
-	tp.DialContext = lim.Wrap(tp.DialContext)
+	tp.DialContext = lim.Wrap(nil).DialContext
 
 	// make a request and time it
 	now := time.Now()

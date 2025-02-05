@@ -21,7 +21,7 @@ func ExampleLimiter_NewLimiter() {
 	lim := bwlimit.NewLimiter(100, 0)
 	defer lim.Stop()
 
-	// wrap the default http transport DialContext
+	// set the default http transport DialContext
 	tp := http.DefaultTransport.(*http.Transport)
 	tp.DialContext = lim.Wrap(nil).DialContext
 
