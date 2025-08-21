@@ -1,0 +1,440 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>bwlimit: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/linkdata/bwlimit/conn.go (100.0%)</option>
+				
+				<option value="file1">github.com/linkdata/bwlimit/dialer.go (100.0%)</option>
+				
+				<option value="file2">github.com/linkdata/bwlimit/limiter.go (100.0%)</option>
+				
+				<option value="file3">github.com/linkdata/bwlimit/listener.go (100.0%)</option>
+				
+				<option value="file4">github.com/linkdata/bwlimit/operation.go (100.0%)</option>
+				
+				<option value="file5">github.com/linkdata/bwlimit/ticker.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package bwlimit
+
+import (
+        "net"
+)
+
+type Conn struct {
+        net.Conn // underlying net.Conn
+        *Limiter // Limiter to use
+}
+
+func (c *Conn) Read(b []byte) (n int, err error) <span class="cov8" title="1">{
+        return c.Limiter.Reads.io(c.Conn.Read, b)
+}</span>
+
+func (c *Conn) Write(b []byte) (n int, err error) <span class="cov8" title="1">{
+        return c.Limiter.Writes.io(c.Conn.Write, b)
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package bwlimit
+
+import (
+        "context"
+        "net"
+)
+
+type Dialer struct {
+        ContextDialer // ContextDialer we wrap
+        *Limiter      // Limiter to use
+}
+
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (conn net.Conn, err error) <span class="cov8" title="1">{
+        if conn, err = d.ContextDialer.DialContext(ctx, network, address); err == nil </span><span class="cov8" title="1">{
+                conn = &amp;Conn{
+                        Conn:    conn,
+                        Limiter: d.Limiter,
+                }
+        }</span>
+        <span class="cov8" title="1">return</span>
+}
+
+func (d *Dialer) Dial(network string, address string) (net.Conn, error) <span class="cov8" title="1">{
+        return d.DialContext(context.Background(), network, address)
+}</span>
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package bwlimit
+
+import (
+        "net"
+)
+
+var DefaultNetDialer = &amp;net.Dialer{}
+
+type Limiter struct {
+        *Ticker
+        Reads  *Operation
+        Writes *Operation
+}
+
+// NewLimiter returns a new limiter from DefaultTicker.
+// If you provide limits, the first will set
+// both read and write limits, the second will set the write limit.
+//
+// To stop the Limiter and free it's resources, call Stop.
+func NewLimiter(limits ...int64) *Limiter <span class="cov8" title="1">{
+        return DefaultTicker.NewLimiter(limits...)
+}</span>
+
+// Stop stops the Limiter and frees any resources. Reads and writes on
+// a stopped and rate-limited Limiter returns io.EOF. On an unlimited
+// Limiter they function as normal.
+func (l *Limiter) Stop() <span class="cov8" title="1">{
+        l.Reads.Stop()
+        l.Writes.Stop()
+}</span>
+
+// alreadyLimits returns true if cd is already limited by this Limiter.
+// This lets us help the user avoiding double-accounting bandwidth.
+func (l *Limiter) alreadyLimits(cd ContextDialer) bool <span class="cov8" title="1">{
+        for </span><span class="cov8" title="1">{
+                if d, ok := cd.(*Dialer); ok </span><span class="cov8" title="1">{
+                        if d.Limiter == l </span><span class="cov8" title="1">{
+                                return true
+                        }</span>
+                        <span class="cov8" title="1">cd = d.ContextDialer</span>
+                } else<span class="cov8" title="1"> {
+                        return false
+                }</span>
+        }
+}
+
+// Wrap returns a ContextDialer wrapping cd that is bandwidth limited by this Limiter.
+//
+// If cd is nil we use DefaultNetDialer. If cd is already limited by this Limiter, cd
+// is returned unchanged.
+func (l *Limiter) Wrap(cd ContextDialer) ContextDialer <span class="cov8" title="1">{
+        if cd == nil </span><span class="cov8" title="1">{
+                cd = DefaultNetDialer
+        }</span>
+        <span class="cov8" title="1">if l.alreadyLimits(cd) </span><span class="cov8" title="1">{
+                return cd
+        }</span>
+        <span class="cov8" title="1">return &amp;Dialer{ContextDialer: cd, Limiter: l}</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package bwlimit
+
+import "net"
+
+type Listener struct {
+        net.Listener // underlying net.Listener
+        *Limiter     // Limiter to use
+}
+
+func (l *Listener) Accept() (conn net.Conn, err error) <span class="cov8" title="1">{
+        if conn, err = l.Listener.Accept(); err == nil </span><span class="cov8" title="1">{
+                conn = &amp;Conn{
+                        Conn:    conn,
+                        Limiter: l.Limiter,
+                }
+        }</span>
+        <span class="cov8" title="1">return</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package bwlimit
+
+import (
+        "io"
+        "sync"
+        "sync/atomic"
+        "time"
+)
+
+const secparts = 10
+const interval = time.Second / secparts
+const batchsize = 4096
+
+type Operation struct {
+        *Ticker              // Ticker we belong to
+        Limit   atomic.Int64 // bandwith limit in bytes/sec
+        Rate    atomic.Int64 // current rate in bytes/sec
+        Count   atomic.Int64 // number of bytes seen
+        avail   atomic.Int64
+        count   atomic.Int64
+        ch      &lt;-chan int
+        reader  bool
+        mu      sync.Mutex // protects following
+        stopCh  chan struct{}
+}
+
+func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) <span class="cov8" title="1">{
+        ch := make(chan int)
+        op = &amp;Operation{
+                Ticker: t,
+                ch:     ch,
+                stopCh: make(chan struct{}),
+                reader: idx == 0,
+        }
+        var limit int64
+        if len(limits) &gt; 0 </span><span class="cov8" title="1">{
+                limit = limits[0]
+                if len(limits) &gt; idx </span><span class="cov8" title="1">{
+                        limit = limits[idx]
+                }</span>
+        }
+        <span class="cov8" title="1">op.Limit.Store(limit)
+        go op.run(ch)
+        return</span>
+}
+
+func (op *Operation) Stop() <span class="cov8" title="1">{
+        op.mu.Lock()
+        ch := op.stopCh
+        op.stopCh = nil
+        op.mu.Unlock()
+        if ch != nil </span><span class="cov8" title="1">{
+                close(ch)
+        }</span>
+}
+
+func (op *Operation) run(ch chan&lt;- int) <span class="cov8" title="1">{
+        defer close(ch)
+
+        op.mu.Lock()
+        stopCh := op.stopCh
+        seccount := 0
+        counts := make([]int64, secparts)
+        op.mu.Unlock()
+
+        if stopCh != nil </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        var limitCh chan&lt;- int
+                        var todo int
+                        var batch int
+                        if limit := op.Limit.Load(); limit &gt; 0 </span><span class="cov8" title="1">{
+                                limitCh = ch
+                                todo = max(1, int(limit/secparts))
+                                batch = min(batchsize, todo)
+                        }</span>
+                        <span class="cov8" title="1">waitCh := op.WaitCh()
+
+                partialsecond:
+                        for </span><span class="cov8" title="1">{
+                                select </span>{
+                                case &lt;-stopCh:<span class="cov8" title="1">
+                                        return</span>
+                                case limitCh &lt;- batch:<span class="cov8" title="1">
+                                        todo -= batch
+                                        todo += int(op.avail.Swap(0))
+                                        if todo &lt; batch </span><span class="cov8" title="1">{
+                                                &lt;-waitCh
+                                                break partialsecond</span>
+                                        }
+                                case &lt;-waitCh:<span class="cov8" title="1">
+                                        break partialsecond</span>
+                                }
+                        }
+
+                        <span class="cov8" title="1">count := op.count.Swap(0)
+                        op.Count.Add(count)
+                        counts[seccount] = count
+                        seccount++
+                        if seccount &gt;= secparts </span><span class="cov8" title="1">{
+                                seccount = 0
+                        }</span>
+                        <span class="cov8" title="1">var rate int64
+                        for i := 0; i &lt; secparts; i++ </span><span class="cov8" title="1">{
+                                rate += counts[i]
+                        }</span>
+                        <span class="cov8" title="1">op.Rate.Store(rate)</span>
+                }
+        }
+}
+
+func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) <span class="cov8" title="1">{
+        if op.Limit.Load() &lt; 1 </span><span class="cov8" title="1">{
+                n, err = fn(b)
+                op.count.Add(int64(n))
+                return
+        }</span>
+        <span class="cov8" title="1">for len(b) &gt; 0 &amp;&amp; err == nil </span><span class="cov8" title="1">{
+                batch, ok := &lt;-op.ch
+                err = io.EOF
+                if ok </span><span class="cov8" title="1">{
+                        var done int
+                        todo := min(len(b), batch)
+                        done, err = fn(b[:todo])
+                        op.avail.Add(int64(batch - done))
+                        if done &gt; 0 </span><span class="cov8" title="1">{
+                                op.count.Add(int64(done))
+                                n += done
+                                b = b[done:]
+                        }</span>
+                        <span class="cov8" title="1">if op.reader &amp;&amp; done &lt; todo </span><span class="cov8" title="1">{
+                                break</span>
+                        }
+                }
+        }
+        <span class="cov8" title="1">if op.reader &amp;&amp; n &gt; 0 &amp;&amp; err == io.EOF </span><span class="cov8" title="1">{
+                err = nil
+        }</span>
+        <span class="cov8" title="1">return</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package bwlimit
+
+import (
+        "sync"
+        "time"
+)
+
+// A Ticker synchronizes rate calculation among multiple Limiters.
+type Ticker struct {
+        mu sync.Mutex
+        ch chan struct{}
+}
+
+var DefaultTicker *Ticker
+
+// NewLimiter returns a new Limiter using this Ticker.
+// If you provide limits, the first will set
+// both read and write limits, the second will set the write limit.
+//
+// To stop the limiter and free it's resources, call Stop.
+func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) <span class="cov8" title="1">{
+        return &amp;Limiter{
+                Ticker: ot,
+                Reads:  NewOperation(ot, limits, 0),
+                Writes: NewOperation(ot, limits, 1),
+        }
+}</span>
+
+// WaitCh returns a channel that will close when the current rate limit
+// time slice runs out.
+func (ot *Ticker) WaitCh() (ch &lt;-chan struct{}) <span class="cov8" title="1">{
+        ot.mu.Lock()
+        ch = ot.ch
+        ot.mu.Unlock()
+        return
+}</span>
+
+func (ot *Ticker) run() <span class="cov8" title="1">{
+        defer close(ot.ch)
+
+        tckr := time.NewTicker(interval)
+        defer tckr.Stop()
+
+        for range tckr.C </span><span class="cov8" title="1">{
+                ot.mu.Lock()
+                oldCh := ot.ch
+                ot.ch = make(chan struct{})
+                ot.mu.Unlock()
+                close(oldCh)
+        }</span>
+}
+
+func init() <span class="cov8" title="1">{
+        DefaultTicker = &amp;Ticker{
+                ch: make(chan struct{}),
+        }
+        go DefaultTicker.run()
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
