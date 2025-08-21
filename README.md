@@ -1,5 +1,5 @@
 [![build](https://github.com/linkdata/bwlimit/actions/workflows/go.yml/badge.svg)](https://github.com/linkdata/bwlimit/actions/workflows/go.yml)
-[![coverage](https://coveralls.io/repos/github/linkdata/bwlimit/badge.svg?branch=main)](https://coveralls.io/github/linkdata/bwlimit?branch=main)
+[![coverage](https://github.com/linkdata/bwlimit/blob/coverage/main/badge.svg)](https://htmlpreview.github.io/?https://github.com/linkdata/bwlimit/blob/coverage/main/report.html)
 [![goreport](https://goreportcard.com/badge/github.com/linkdata/bwlimit)](https://goreportcard.com/report/github.com/linkdata/bwlimit)
 [![Docs](https://godoc.org/github.com/linkdata/bwlimit?status.svg)](https://godoc.org/github.com/linkdata/bwlimit)
 
