@@ -13,6 +13,7 @@ type Limiter struct {
 }
 
 // NewLimiter returns a new limiter from DefaultTicker.
+// If DefaultTicker has been stopped, returns nil.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
 // Limits are applied in 100ms slices with fractional carry-over between
