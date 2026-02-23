@@ -8,17 +8,34 @@ import (
 // A Ticker synchronizes rate calculation among multiple Limiters.
 // Ticker values must be created with NewTicker; the zero value is not supported.
 type Ticker struct {
-	mu sync.Mutex
-	ch chan struct{}
+	mu     sync.Mutex
+	ch     chan struct{}
+	stopCh chan struct{}
+	doneCh chan struct{}
 }
 
 var DefaultTicker *Ticker = NewTicker()
 
 // NewTicker creates and starts a Ticker.
 func NewTicker() (ot *Ticker) {
-	ot = &Ticker{ch: make(chan struct{})}
+	ot = &Ticker{
+		ch:     make(chan struct{}),
+		stopCh: make(chan struct{}),
+		doneCh: make(chan struct{}),
+	}
 	go ot.run()
 	return
+}
+
+// Stop stops the Ticker and closes the current WaitCh channel.
+func (ot *Ticker) Stop() {
+	ot.mu.Lock()
+	if ch := ot.stopCh; ch != nil {
+		ot.stopCh = nil
+		close(ch)
+	}
+	ot.mu.Unlock()
+	<-ot.doneCh
 }
 
 // NewLimiter returns a new Limiter using this Ticker.
@@ -47,16 +64,24 @@ func (ot *Ticker) WaitCh() (ch <-chan struct{}) {
 }
 
 func (ot *Ticker) run() {
-	defer close(ot.ch)
+	defer func() {
+		close(ot.ch)
+		close(ot.doneCh)
+	}()
 
 	tckr := time.NewTicker(interval)
 	defer tckr.Stop()
 
-	for range tckr.C {
-		ot.mu.Lock()
-		oldCh := ot.ch
-		ot.ch = make(chan struct{})
-		ot.mu.Unlock()
-		close(oldCh)
+	for {
+		select {
+		case <-tckr.C:
+			ot.mu.Lock()
+			oldCh := ot.ch
+			ot.ch = make(chan struct{})
+			ot.mu.Unlock()
+			close(oldCh)
+		case <-ot.stopCh:
+			return
+		}
 	}
 }

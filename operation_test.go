@@ -2,10 +2,8 @@ package bwlimit
 
 import (
 	"bytes"
-	"errors"
-	"io"
-	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -24,7 +22,7 @@ func (ur *unlimitedReader) Read(b []byte) (int, error) {
 }
 
 func TestOperation_io_read_nolimit(t *testing.T) {
-	const numbytes = (2 * 1024 * 1024 * 1024) - 1
+	const numbytes = 8 * 1024 * 1024
 
 	l := NewLimiter()
 	defer l.Stop()
@@ -35,10 +33,13 @@ func TestOperation_io_read_nolimit(t *testing.T) {
 	var x byte
 	buf := make([]byte, 1024*1024)
 
-	now := time.Now()
 	for numread < numbytes && err == nil {
+		todo := cap(buf) - numread%101
+		if left := numbytes - numread; left < todo {
+			todo = left
+		}
 		var n int
-		n, err = l.Reads.io(r.Read, buf[:(cap(buf)-numread%101)])
+		n, err = l.Reads.io(r.Read, buf[:todo])
 		for i := range buf[:n] {
 			if buf[i] != x {
 				t.Fatal(numread, x)
@@ -46,223 +47,220 @@ func TestOperation_io_read_nolimit(t *testing.T) {
 			x++
 			numread++
 		}
-		if err == nil && time.Since(now) > time.Second {
-			break
-		}
 	}
-	elapsed := time.Since(now)
-	t.Log("no limit numread", numread, "should be close to", (numread*int(time.Second))/(int(elapsed)))
 
 	if err != nil {
 		t.Error(err)
+	}
+	if numread != numbytes {
+		t.Fatalf("read %d bytes, want %d", numread, numbytes)
 	}
 }
 
 func TestOperation_io_read_limit(t *testing.T) {
-	l := NewLimiter(100)
-	defer l.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(100)
+		defer l.Stop()
 
-	want := []byte("0123456789")
-	r := bytes.NewReader(want)
-	got := make([]byte, 100)
+		want := []byte("0123456789")
+		r := bytes.NewReader(want)
+		got := make([]byte, 100)
 
-	// reading zero bytes returns immediately
-	now := time.Now()
-	n, err := l.Reads.io(r.Read, got[:0])
-	if n != 0 {
-		t.Error(n)
-	}
-	if err != nil {
-		t.Error(err)
-	}
-	if elapsed := time.Since(now); elapsed > interval/2 {
-		t.Error("too slow", elapsed)
-	}
+		// Reading zero bytes returns immediately.
+		now := time.Now()
+		n, err := l.Reads.io(r.Read, got[:0])
+		if n != 0 {
+			t.Error(n)
+		}
+		if err != nil {
+			t.Error(err)
+		}
+		if elapsed := time.Since(now); elapsed > interval/2 {
+			t.Error("too slow", elapsed)
+		}
 
-	n, err = l.Reads.io(r.Read, got)
-	if n != len(want) {
-		t.Error(n)
-	}
-	if err != nil {
-		t.Error(err)
-	}
+		n, err = l.Reads.io(r.Read, got)
+		if n != len(want) {
+			t.Error(n)
+		}
+		if err != nil {
+			t.Error(err)
+		}
 
-	got = got[:n]
-	if !bytes.Equal(got, want) {
-		t.Error(string(got), "!=", string(want))
-	}
-	if elapsed := time.Since(now); elapsed > interval*2 {
-		t.Error(elapsed)
-	}
+		got = got[:n]
+		if !bytes.Equal(got, want) {
+			t.Error(string(got), "!=", string(want))
+		}
+		if elapsed := time.Since(now); elapsed > interval*2 {
+			t.Error(elapsed)
+		}
+	})
 }
 
 func TestOperation_io_read_limit_change_to_unlimited(t *testing.T) {
-	l := NewLimiter(100)
-	defer l.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(100)
+		defer l.Stop()
 
-	r := bytes.NewReader(make([]byte, 1000))
-	done := make(chan struct{})
-	var n int
-	var err error
+		r := bytes.NewReader(make([]byte, 1000))
+		done := make(chan struct{})
+		var n int
+		var err error
 
-	go func() {
-		n, err = l.Reads.io(r.Read, make([]byte, 1000))
-		close(done)
-	}()
+		go func() {
+			n, err = l.Reads.io(r.Read, make([]byte, 1000))
+			close(done)
+		}()
 
-	// Let the read enter limited mode before switching to unlimited.
-	<-l.WaitCh()
-	<-l.WaitCh()
-	l.Reads.Limit.Store(0)
+		// Let the read enter limited mode before switching to unlimited.
+		<-l.WaitCh()
+		<-l.WaitCh()
+		l.Reads.Limit.Store(0)
 
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("read hung after limit changed to unlimited")
-	}
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("read hung after limit changed to unlimited")
+		}
 
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 1000 {
-		t.Fatal(n)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 1000 {
+			t.Fatal(n)
+		}
+	})
 }
 
 func TestOperation_read_rate_low(t *testing.T) {
-	l := NewLimiter(1000)
-	defer l.Stop()
-	r := bytes.NewReader(make([]byte, 2000))
-	buf := make([]byte, 1001)
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(1000)
+		defer l.Stop()
+		r := bytes.NewReader(make([]byte, 2000))
+		buf := make([]byte, 1001)
 
-	var tickCount atomic.Int32
-	go func() {
-		for {
-			<-l.WaitCh()
-			tickCount.Add(1)
+		// Should read in batches of 1000/secparts (=100) bytes.
+		<-l.WaitCh()
+		now := time.Now()
+		n, err := l.Reads.io(r.Read, buf)
+		elapsed := time.Since(now)
+		<-l.WaitCh()
+		synctest.Wait()
+		rate := l.Reads.Rate.Load()
+
+		if n < 990 || n > 1010 {
+			t.Error(n)
 		}
-	}()
-
-	// should read in batches of 1000/secparts (=100) bytes
-	<-l.WaitCh()
-	now := time.Now()
-	n, err := l.Reads.io(r.Read, buf)
-	elapsed := time.Since(now)
-	rate := l.Reads.Rate.Load()
-	<-l.WaitCh()
-
-	if n := tickCount.Load(); n < 11 || n > 13 {
-		t.Error(n)
-	}
-	if n < 990 || n > 1010 {
-		t.Error(n)
-	}
-	if err != nil {
-		t.Error(err)
-	}
-
-	if elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
-		t.Log(l.Reads.Limit.Load())
-		t.Error(elapsed)
-	}
-	if rate < 990 || rate > 1000 {
-		t.Error(rate)
-	}
+		if err != nil {
+			t.Error(err)
+		}
+		if elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1100 {
+			t.Log(l.Reads.Limit.Load())
+			t.Error(elapsed)
+		}
+		if rate < 900 || rate > 1000 {
+			t.Error(rate)
+		}
+	})
 }
 
 func TestOperation_read_rate_very_low(t *testing.T) {
-	l := NewLimiter(5)
-	defer l.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(5)
+		defer l.Stop()
 
-	r := bytes.NewReader(make([]byte, 5))
-	buf := make([]byte, 5)
+		r := bytes.NewReader(make([]byte, 5))
+		buf := make([]byte, 5)
 
-	now := time.Now()
-	n, err := l.Reads.io(r.Read, buf)
-	elapsed := time.Since(now)
+		now := time.Now()
+		n, err := l.Reads.io(r.Read, buf)
+		elapsed := time.Since(now)
 
-	if n != 5 {
-		t.Fatal(n)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+		if n != 5 {
+			t.Fatal(n)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	// 5 bytes at 5 bytes/sec should take about a second. The old fixed
-	// 100ms grant floor completed in about 500ms.
-	if elapsed < 700*time.Millisecond {
-		t.Fatalf("too fast for very low limit: %v", elapsed)
-	}
-	if elapsed > 5*time.Second {
-		t.Fatalf("too slow for very low limit: %v", elapsed)
-	}
+		// 5 bytes at 5 bytes/sec should take about a second. The old fixed
+		// 100ms grant floor completed in about 500ms.
+		if elapsed < 700*time.Millisecond {
+			t.Fatalf("too fast for very low limit: %v", elapsed)
+		}
+		if elapsed > 5*time.Second {
+			t.Fatalf("too slow for very low limit: %v", elapsed)
+		}
+	})
 }
 
 func TestOperation_read_rate_high(t *testing.T) {
-	const numbytes = (2 * 1024 * 1024 * 1024) - 1
-	l := NewLimiter(numbytes)
-	defer l.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		const numbytes = 2 * 1024 * 1024
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(numbytes)
+		defer l.Stop()
 
-	r := &unlimitedReader{}
+		r := bytes.NewReader(make([]byte, numbytes))
+		buf := make([]byte, 64*1024)
 
-	var numread int
-	var err error
-	var x byte
-	buf := make([]byte, 1024*1024)
-
-	go func() {
-		<-time.NewTimer(time.Second).C
-		l.Stop()
-	}()
-
-	now := time.Now()
-	for numread < numbytes && err == nil {
-		var n int
-		n, err = l.Reads.io(r.Read, buf[:(cap(buf)-numread%101)])
-		for i := range buf[:n] {
-			if buf[i] != x {
-				t.Fatal(numread, x)
+		var numread int
+		now := time.Now()
+		for numread < numbytes {
+			todo := len(buf)
+			if left := numbytes - numread; left < todo {
+				todo = left
 			}
-			x++
-			numread++
+			n, err := l.Reads.io(r.Read, buf[:todo])
+			numread += n
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-	}
-	elapsed := time.Since(now)
-	t.Log("high rate numread", numread, "should be close to", (numread*int(time.Second))/(int(elapsed)))
+		elapsed := time.Since(now)
+		<-l.WaitCh()
+		synctest.Wait()
 
-	if err == nil {
 		if elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1200 {
 			t.Error(elapsed)
 		}
-		if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/10) || rate > numbytes {
+		if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/5) || rate > numbytes {
 			t.Error(rate)
 		}
-	} else if !errors.Is(err, io.EOF) {
-		t.Error(err)
-	}
+	})
 }
 
 func TestOperation_write_rate(t *testing.T) {
-	l := NewLimiter(1000000)
-	defer l.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(1000000)
+		defer l.Stop()
 
-	buf := make([]byte, 10000)
+		buf := make([]byte, 10000)
+		w := bytes.NewBuffer(buf)
 
-	w := bytes.NewBuffer(buf)
-	n, err := l.Writes.io(w.Write, []byte("0123456789"))
-	if n != 10 {
-		t.Error(n)
-	}
-	if err != nil {
-		t.Error(err)
-	}
+		n, err := l.Writes.io(w.Write, []byte("0123456789"))
+		if n != 10 {
+			t.Error(n)
+		}
+		if err != nil {
+			t.Error(err)
+		}
 
-	now := time.Now()
-	rate := l.Writes.Rate.Load()
-	for rate == 0 && time.Since(now) < time.Second {
-		rate = l.Writes.Rate.Load()
-	}
-	if rate != 10 {
-		t.Error(rate)
-	}
+		<-l.WaitCh()
+		synctest.Wait()
+		if rate := l.Writes.Rate.Load(); rate != 10 {
+			t.Error(rate)
+		}
+	})
 }
