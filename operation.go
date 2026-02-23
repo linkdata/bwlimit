@@ -95,6 +95,8 @@ func (op *Operation) run(ch chan<- int64) {
 				select {
 				case <-stopCh:
 					return
+				case <-op.Ticker.doneCh:
+					return
 				case limitCh <- batch:
 					todo -= batch
 					todo += op.avail.Swap(0)
