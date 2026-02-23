@@ -143,7 +143,9 @@ type Limiter struct {
 // NewLimiter returns a new limiter from DefaultTicker.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
-// Limits are applied in 100ms slices, so very low rates are approximate.
+// Limits are applied in 100ms slices with fractional carry-over between
+// slices, so very low rates are accurate over time but can be bursty
+// at slice boundaries.
 //
 // To stop the Limiter and free it's resources, call Stop.
 func NewLimiter(limits ...int64) *Limiter <span class="cov8" title="1">{
@@ -286,6 +288,7 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
         stopCh := op.stopCh
         seccount := 0
         counts := make([]int64, secparts)
+        carry := int64(0)
         op.mu.Unlock()
 
         if stopCh != nil </span><span class="cov8" title="1">{
@@ -294,9 +297,16 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
                         var todo int64
                         var batch int64
                         if limit := op.Limit.Load(); limit &gt; 0 </span><span class="cov8" title="1">{
-                                limitCh = ch
-                                todo = max(1, limit/secparts)
-                                batch = min(batchsize, todo)
+                                carry += limit
+                                todo = carry / secparts
+                                carry = carry % secparts
+                                todo += op.avail.Swap(0)
+                                if todo &gt; 0 </span><span class="cov8" title="1">{
+                                        limitCh = ch
+                                        batch = min(batchsize, todo)
+                                }</span>
+                        } else<span class="cov8" title="1"> {
+                                carry = 0
                         }</span>
                         <span class="cov8" title="1">waitCh := op.WaitCh()
 
@@ -396,7 +406,9 @@ func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
 // NewLimiter returns a new Limiter using this Ticker.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
-// Limits are applied in 100ms slices, so very low rates are approximate.
+// Limits are applied in 100ms slices with fractional carry-over between
+// slices, so very low rates are accurate over time but can be bursty
+// at slice boundaries.
 //
 // To stop the limiter and free it's resources, call Stop.
 func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) <span class="cov8" title="1">{
