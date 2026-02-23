@@ -23,7 +23,7 @@ func NewTicker() (ot *Ticker) {
 		stopCh: make(chan struct{}),
 		doneCh: make(chan struct{}),
 	}
-	go ot.run()
+	go ot.run(ot.stopCh)
 	return
 }
 
@@ -63,7 +63,7 @@ func (ot *Ticker) WaitCh() (ch <-chan struct{}) {
 	return
 }
 
-func (ot *Ticker) run() {
+func (ot *Ticker) run(stopCh chan struct{}) {
 	defer func() {
 		close(ot.ch)
 		close(ot.doneCh)
@@ -75,12 +75,13 @@ func (ot *Ticker) run() {
 	for {
 		select {
 		case <-tckr.C:
+			newCh := make(chan struct{})
 			ot.mu.Lock()
 			oldCh := ot.ch
-			ot.ch = make(chan struct{})
+			ot.ch = newCh
 			ot.mu.Unlock()
 			close(oldCh)
-		case <-ot.stopCh:
+		case <-stopCh:
 			return
 		}
 	}
