@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func TestTicker_zeroValue_NewLimiter(t *testing.T) {
-	l := (&Ticker{}).NewLimiter(1000)
+func TestTicker_NewTicker_NewLimiter(t *testing.T) {
+	l := NewTicker().NewLimiter(1000)
 	defer l.Stop()
 
 	done := make(chan struct{})
@@ -19,7 +19,6 @@ func TestTicker_zeroValue_NewLimiter(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("read stalled with zero-value ticker")
+		t.Fatal("read stalled with NewTicker")
 	}
 }
-

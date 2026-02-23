@@ -13,6 +13,8 @@ Only depends on the standard library.
 
 `go get github.com/linkdata/bwlimit`
 
+`Ticker` must be created with `bwlimit.NewTicker()`. The zero-value `Ticker` is not supported.
+
 ## Example
 
 ```go

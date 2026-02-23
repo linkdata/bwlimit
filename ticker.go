@@ -6,6 +6,7 @@ import (
 )
 
 // A Ticker synchronizes rate calculation among multiple Limiters.
+// Ticker values must be created with NewTicker; the zero value is not supported.
 type Ticker struct {
 	mu sync.Mutex
 	ch chan struct{}
@@ -13,6 +14,7 @@ type Ticker struct {
 
 var DefaultTicker *Ticker = NewTicker()
 
+// NewTicker creates and starts a Ticker.
 func NewTicker() (ot *Ticker) {
 	ot = &Ticker{ch: make(chan struct{})}
 	go ot.run()
