@@ -24,6 +24,7 @@ func NewTicker() (ot *Ticker) {
 // NewLimiter returns a new Limiter using this Ticker.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
+// Limits are applied in 100ms slices, so very low rates are approximate.
 //
 // To stop the limiter and free it's resources, call Stop.
 func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) {
