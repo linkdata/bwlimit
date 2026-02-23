@@ -271,6 +271,41 @@ func TestOperation_read_rate_nonBatchMultiple(t *testing.T) {
 	})
 }
 
+func TestOperation_read_noIdleBurstAccumulation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(100)
+		defer l.Stop()
+
+		// Let several slices pass while idle. This must not bank unlimited budget.
+		for range 30 {
+			<-l.WaitCh()
+		}
+
+		r := bytes.NewReader(make([]byte, 300))
+		buf := make([]byte, 300)
+
+		now := time.Now()
+		n, err := l.Reads.io(r.Read, buf)
+		elapsed := time.Since(now)
+
+		if n != 300 {
+			t.Fatal(n)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 300 bytes at 100 bytes/sec should take about 3 seconds.
+		if elapsed < 2*time.Second {
+			t.Fatalf("read completed too quickly after idle period: %v", elapsed)
+		}
+		if elapsed > 6*time.Second {
+			t.Fatalf("read took too long: %v", elapsed)
+		}
+	})
+}
+
 func TestOperation_write_rate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ticker := NewTicker()

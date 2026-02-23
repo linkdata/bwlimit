@@ -16,7 +16,7 @@ type Operation struct {
 	Limit   atomic.Int64 // bandwith limit in bytes/sec
 	Rate    atomic.Int64 // current rate in bytes/sec
 	Count   atomic.Int64 // number of bytes seen
-	avail   atomic.Int64
+	avail   atomic.Int64 // refunded bytes from partially used grants
 	count   atomic.Int64
 	ch      <-chan int64
 	doneCh  chan struct{}
@@ -105,10 +105,8 @@ func (op *Operation) run(ch chan<- int64) {
 				}
 			}
 
-			// Preserve any budget left in this slice for the next one.
-			if todo > 0 {
-				op.avail.Add(todo)
-			}
+			// Any base budget not used in this slice is intentionally dropped.
+			// This prevents idle periods from accumulating burst capacity.
 			count := op.count.Swap(0)
 			op.Count.Add(count)
 			counts[seccount] = count
