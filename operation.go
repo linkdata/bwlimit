@@ -109,29 +109,35 @@ func (op *Operation) run(ch chan<- int64) {
 }
 
 func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) {
-	if op.Limit.Load() < 1 {
-		n, err = fn(b)
-		op.count.Add(int64(n))
-		return
-	}
+outer:
 	for len(b) > 0 && err == nil {
-		batch, ok := <-op.ch
-		err = io.EOF
-		if ok {
-			var done int
-			todo := min(int64(len(b)), batch)
-			done, err = fn(b[:todo])
-			op.avail.Add(batch - int64(done))
-			if done > 0 {
-				op.count.Add(int64(done))
-				n += int(done)
-				b = b[done:]
+		var done int
+		if op.Limit.Load() < 1 {
+			done, err = fn(b)
+			n += done
+			op.count.Add(int64(done))
+			return
+		}
+		select {
+		case batch, ok := <-op.ch:
+			err = io.EOF
+			if ok {
+				todo := min(int64(len(b)), batch)
+				done, err = fn(b[:todo])
+				op.avail.Add(batch - int64(done))
+				if done > 0 {
+					op.count.Add(int64(done))
+					n += int(done)
+					b = b[done:]
+				}
+				if op.reader && int64(done) < todo {
+					break outer
+				}
 			}
-			if op.reader && int64(done) < todo {
-				break
-			}
+		case <-op.WaitCh():
 		}
 	}
+
 	if op.reader && n > 0 && err == io.EOF {
 		err = nil
 	}

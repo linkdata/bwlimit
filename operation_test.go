@@ -96,6 +96,39 @@ func TestOperation_io_read_limit(t *testing.T) {
 	}
 }
 
+func TestOperation_io_read_limit_change_to_unlimited(t *testing.T) {
+	l := NewLimiter(100)
+	defer l.Stop()
+
+	r := bytes.NewReader(make([]byte, 1000))
+	done := make(chan struct{})
+	var n int
+	var err error
+
+	go func() {
+		n, err = l.Reads.io(r.Read, make([]byte, 1000))
+		close(done)
+	}()
+
+	// Let the read enter limited mode before switching to unlimited.
+	<-l.WaitCh()
+	<-l.WaitCh()
+	l.Reads.Limit.Store(0)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("read hung after limit changed to unlimited")
+	}
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1000 {
+		t.Fatal(n)
+	}
+}
+
 func TestOperation_read_rate_low(t *testing.T) {
 	l := NewLimiter(1000)
 	defer l.Stop()
