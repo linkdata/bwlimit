@@ -156,6 +156,8 @@ func NewLimiter(limits ...int64) *Limiter <span class="cov8" title="1">{
 // Stop stops the Limiter and frees any resources. Reads and writes on
 // a stopped and rate-limited Limiter returns io.EOF. On an unlimited
 // Limiter they function as normal.
+//
+// Count and Rate metrics are not updated after Stop.
 func (l *Limiter) Stop() <span class="cov8" title="1">{
         l.Reads.Stop()
         l.Writes.Stop()
@@ -237,7 +239,7 @@ type Operation struct {
         Limit   atomic.Int64 // bandwith limit in bytes/sec
         Rate    atomic.Int64 // current rate in bytes/sec
         Count   atomic.Int64 // number of bytes seen
-        avail   atomic.Int64
+        avail   atomic.Int64 // refunded bytes from partially used grants
         count   atomic.Int64
         ch      &lt;-chan int64
         doneCh  chan struct{}
@@ -326,10 +328,8 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
                                 }
                         }
 
-                        // Preserve any budget left in this slice for the next one.
-                        <span class="cov8" title="1">if todo &gt; 0 </span><span class="cov8" title="1">{
-                                op.avail.Add(todo)
-                        }</span>
+                        // Any base budget not used in this slice is intentionally dropped.
+                        // This prevents idle periods from accumulating burst capacity.
                         <span class="cov8" title="1">count := op.count.Swap(0)
                         op.Count.Add(count)
                         counts[seccount] = count
