@@ -405,7 +405,7 @@ func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
                 stopCh: make(chan struct{}),
                 doneCh: make(chan struct{}),
         }
-        go ot.run()
+        go ot.run(ot.stopCh)
         return
 }</span>
 
@@ -445,7 +445,7 @@ func (ot *Ticker) WaitCh() (ch &lt;-chan struct{}) <span class="cov8" title="1">
         return
 }</span>
 
-func (ot *Ticker) run() <span class="cov8" title="1">{
+func (ot *Ticker) run(stopCh chan struct{}) <span class="cov8" title="1">{
         defer func() </span><span class="cov8" title="1">{
                 close(ot.ch)
                 close(ot.doneCh)
@@ -457,12 +457,13 @@ func (ot *Ticker) run() <span class="cov8" title="1">{
         for </span><span class="cov8" title="1">{
                 select </span>{
                 case &lt;-tckr.C:<span class="cov8" title="1">
+                        newCh := make(chan struct{})
                         ot.mu.Lock()
                         oldCh := ot.ch
-                        ot.ch = make(chan struct{})
+                        ot.ch = newCh
                         ot.mu.Unlock()
                         close(oldCh)</span>
-                case &lt;-ot.stopCh:<span class="cov8" title="1">
+                case &lt;-stopCh:<span class="cov8" title="1">
                         return</span>
                 }
         }
