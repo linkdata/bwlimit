@@ -19,6 +19,7 @@ type Operation struct {
 	avail   atomic.Int64
 	count   atomic.Int64
 	ch      <-chan int64
+	doneCh  chan struct{}
 	reader  bool
 	mu      sync.Mutex // protects following
 	stopCh  chan struct{}
@@ -30,6 +31,7 @@ func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) {
 		Ticker: t,
 		ch:     ch,
 		stopCh: make(chan struct{}),
+		doneCh: make(chan struct{}),
 		reader: idx == 0,
 	}
 	var limit int64
@@ -52,10 +54,15 @@ func (op *Operation) Stop() {
 	if ch != nil {
 		close(ch)
 	}
+	<-op.doneCh
 }
 
 func (op *Operation) run(ch chan<- int64) {
-	defer close(ch)
+	defer func() {
+		close(ch)
+		op.Count.Add(op.count.Swap(0))
+		close(op.doneCh)
+	}()
 
 	op.mu.Lock()
 	stopCh := op.stopCh

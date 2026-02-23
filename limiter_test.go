@@ -42,3 +42,23 @@ func TestLimiter_double_Wrap(t *testing.T) {
 		t.Error(d1, d2)
 	}
 }
+
+func TestLimiter_Stop_flushesCount(t *testing.T) {
+	l := NewLimiter(0)
+
+	r := bytes.NewReader(make([]byte, 10))
+	buf := make([]byte, 10)
+	n, err := l.Reads.io(r.Read, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 10 {
+		t.Fatal(n)
+	}
+
+	l.Stop()
+
+	if got := l.Reads.Count.Load(); got != int64(n) {
+		t.Fatalf("got %d want %d", got, n)
+	}
+}
