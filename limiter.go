@@ -33,11 +33,19 @@ func (l *Limiter) Stop() {
 // alreadyLimits returns true if cd is already limited by this Limiter.
 // This lets us help the user avoiding double-accounting bandwidth.
 func (l *Limiter) alreadyLimits(cd ContextDialer) bool {
+	seen := make(map[*Dialer]struct{})
 	for {
 		if d, ok := cd.(*Dialer); ok {
+			if d == nil {
+				return false
+			}
 			if d.Limiter == l {
 				return true
 			}
+			if _, ok := seen[d]; ok {
+				return false
+			}
+			seen[d] = struct{}{}
 			cd = d.ContextDialer
 		} else {
 			return false

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"time"
 )
 
 func TestLimiter_Stop(t *testing.T) {
@@ -60,5 +61,40 @@ func TestLimiter_Stop_flushesCount(t *testing.T) {
 
 	if got := l.Reads.Count.Load(); got != int64(n) {
 		t.Fatalf("got %d want %d", got, n)
+	}
+}
+
+func TestLimiter_Wrap_cyclicDialerChain_doesNotHang(t *testing.T) {
+	l1 := NewLimiter()
+	defer l1.Stop()
+	l2 := NewLimiter()
+	defer l2.Stop()
+
+	d := &Dialer{Limiter: l1}
+	d.ContextDialer = d
+
+	done := make(chan ContextDialer, 1)
+	go func() {
+		done <- l2.Wrap(d)
+	}()
+
+	select {
+	case wrapped := <-done:
+		if wrapped == nil {
+			t.Fatal("expected wrapped dialer")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Wrap hung on cyclic dialer chain")
+	}
+}
+
+func TestLimiter_alreadyLimits_typedNilDialer(t *testing.T) {
+	l := NewLimiter()
+	defer l.Stop()
+
+	var d *Dialer
+	var cd ContextDialer = d
+	if l.alreadyLimits(cd) {
+		t.Fatal("typed nil dialer should not be detected as already limited")
 	}
 }
