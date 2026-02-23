@@ -318,29 +318,35 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
 }
 
 func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) <span class="cov8" title="1">{
-        if op.Limit.Load() &lt; 1 </span><span class="cov8" title="1">{
-                n, err = fn(b)
-                op.count.Add(int64(n))
-                return
-        }</span>
-        <span class="cov8" title="1">for len(b) &gt; 0 &amp;&amp; err == nil </span><span class="cov8" title="1">{
-                batch, ok := &lt;-op.ch
-                err = io.EOF
-                if ok </span><span class="cov8" title="1">{
-                        var done int
-                        todo := min(int64(len(b)), batch)
-                        done, err = fn(b[:todo])
-                        op.avail.Add(batch - int64(done))
-                        if done &gt; 0 </span><span class="cov8" title="1">{
-                                op.count.Add(int64(done))
-                                n += int(done)
-                                b = b[done:]
-                        }</span>
-                        <span class="cov8" title="1">if op.reader &amp;&amp; int64(done) &lt; todo </span><span class="cov8" title="1">{
-                                break</span>
+outer:
+        for len(b) &gt; 0 &amp;&amp; err == nil </span><span class="cov8" title="1">{
+                var done int
+                if op.Limit.Load() &lt; 1 </span><span class="cov8" title="1">{
+                        done, err = fn(b)
+                        n += done
+                        op.count.Add(int64(done))
+                        return
+                }</span>
+                <span class="cov8" title="1">select </span>{
+                case batch, ok := &lt;-op.ch:<span class="cov8" title="1">
+                        err = io.EOF
+                        if ok </span><span class="cov8" title="1">{
+                                todo := min(int64(len(b)), batch)
+                                done, err = fn(b[:todo])
+                                op.avail.Add(batch - int64(done))
+                                if done &gt; 0 </span><span class="cov8" title="1">{
+                                        op.count.Add(int64(done))
+                                        n += int(done)
+                                        b = b[done:]
+                                }</span>
+                                <span class="cov8" title="1">if op.reader &amp;&amp; int64(done) &lt; todo </span><span class="cov8" title="1">{
+                                        break outer</span>
+                                }
                         }
+                case &lt;-op.WaitCh():<span class="cov8" title="1"></span>
                 }
         }
+
         <span class="cov8" title="1">if op.reader &amp;&amp; n &gt; 0 &amp;&amp; err == io.EOF </span><span class="cov8" title="1">{
                 err = nil
         }</span>
@@ -356,6 +362,7 @@ import (
 )
 
 // A Ticker synchronizes rate calculation among multiple Limiters.
+// Ticker values must be created with NewTicker; the zero value is not supported.
 type Ticker struct {
         mu sync.Mutex
         ch chan struct{}
@@ -363,6 +370,7 @@ type Ticker struct {
 
 var DefaultTicker *Ticker = NewTicker()
 
+// NewTicker creates and starts a Ticker.
 func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
         ot = &amp;Ticker{ch: make(chan struct{})}
         go ot.run()
