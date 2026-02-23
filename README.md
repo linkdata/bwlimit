@@ -39,16 +39,18 @@ func main() {
 	lim := bwlimit.NewLimiter(100, 0)
 	defer lim.Stop()
 
-	// set the default http transport DialContext
-	tp := http.DefaultTransport.(*http.Transport)
+	// clone the default transport so this change is local to this client
+	tp := http.DefaultTransport.(*http.Transport).Clone()
 	tp.DialContext = lim.Wrap(nil).DialContext
+	client := &http.Client{Transport: tp}
 
 	// make a request and time it
 	now := time.Now()
-	resp, err := http.Get(srv.URL)
+	resp, err := client.Get(srv.URL)
 	elapsed := time.Since(now)
 
 	if err == nil {
+		defer resp.Body.Close()
 		var body []byte
 		if body, err = io.ReadAll(resp.Body); err == nil {
 			fmt.Printf("%v %v %q\n", elapsed >= time.Second, lim.Reads.Count.Load() > 100, string(body))
