@@ -18,14 +18,14 @@ type Operation struct {
 	Count   atomic.Int64 // number of bytes seen
 	avail   atomic.Int64
 	count   atomic.Int64
-	ch      <-chan int
+	ch      <-chan int64
 	reader  bool
 	mu      sync.Mutex // protects following
 	stopCh  chan struct{}
 }
 
 func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) {
-	ch := make(chan int)
+	ch := make(chan int64)
 	op = &Operation{
 		Ticker: t,
 		ch:     ch,
@@ -54,7 +54,7 @@ func (op *Operation) Stop() {
 	}
 }
 
-func (op *Operation) run(ch chan<- int) {
+func (op *Operation) run(ch chan<- int64) {
 	defer close(ch)
 
 	op.mu.Lock()
@@ -65,12 +65,12 @@ func (op *Operation) run(ch chan<- int) {
 
 	if stopCh != nil {
 		for {
-			var limitCh chan<- int
-			var todo int
-			var batch int
+			var limitCh chan<- int64
+			var todo int64
+			var batch int64
 			if limit := op.Limit.Load(); limit > 0 {
 				limitCh = ch
-				todo = max(1, int(limit/secparts))
+				todo = max(1, limit/secparts)
 				batch = min(batchsize, todo)
 			}
 			waitCh := op.WaitCh()
@@ -82,7 +82,7 @@ func (op *Operation) run(ch chan<- int) {
 					return
 				case limitCh <- batch:
 					todo -= batch
-					todo += int(op.avail.Swap(0))
+					todo += op.avail.Swap(0)
 					if todo < batch {
 						<-waitCh
 						break partialsecond
@@ -119,15 +119,15 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
 		err = io.EOF
 		if ok {
 			var done int
-			todo := min(len(b), batch)
+			todo := min(int64(len(b)), batch)
 			done, err = fn(b[:todo])
-			op.avail.Add(int64(batch - done))
+			op.avail.Add(batch - int64(done))
 			if done > 0 {
 				op.count.Add(int64(done))
-				n += done
+				n += int(done)
 				b = b[done:]
 			}
-			if op.reader && done < todo {
+			if op.reader && int64(done) < todo {
 				break
 			}
 		}
