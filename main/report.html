@@ -390,18 +390,35 @@ import (
 // A Ticker synchronizes rate calculation among multiple Limiters.
 // Ticker values must be created with NewTicker; the zero value is not supported.
 type Ticker struct {
-        mu sync.Mutex
-        ch chan struct{}
+        mu     sync.Mutex
+        ch     chan struct{}
+        stopCh chan struct{}
+        doneCh chan struct{}
 }
 
 var DefaultTicker *Ticker = NewTicker()
 
 // NewTicker creates and starts a Ticker.
 func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
-        ot = &amp;Ticker{ch: make(chan struct{})}
+        ot = &amp;Ticker{
+                ch:     make(chan struct{}),
+                stopCh: make(chan struct{}),
+                doneCh: make(chan struct{}),
+        }
         go ot.run()
         return
 }</span>
+
+// Stop stops the Ticker and closes the current WaitCh channel.
+func (ot *Ticker) Stop() <span class="cov8" title="1">{
+        ot.mu.Lock()
+        if ch := ot.stopCh; ch != nil </span><span class="cov8" title="1">{
+                ot.stopCh = nil
+                close(ch)
+        }</span>
+        <span class="cov8" title="1">ot.mu.Unlock()
+        &lt;-ot.doneCh</span>
+}
 
 // NewLimiter returns a new Limiter using this Ticker.
 // If you provide limits, the first will set
@@ -429,18 +446,26 @@ func (ot *Ticker) WaitCh() (ch &lt;-chan struct{}) <span class="cov8" title="1">
 }</span>
 
 func (ot *Ticker) run() <span class="cov8" title="1">{
-        defer close(ot.ch)
+        defer func() </span><span class="cov8" title="1">{
+                close(ot.ch)
+                close(ot.doneCh)
+        }</span>()
 
-        tckr := time.NewTicker(interval)
+        <span class="cov8" title="1">tckr := time.NewTicker(interval)
         defer tckr.Stop()
 
-        for range tckr.C </span><span class="cov8" title="1">{
-                ot.mu.Lock()
-                oldCh := ot.ch
-                ot.ch = make(chan struct{})
-                ot.mu.Unlock()
-                close(oldCh)
-        }</span>
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-tckr.C:<span class="cov8" title="1">
+                        ot.mu.Lock()
+                        oldCh := ot.ch
+                        ot.ch = make(chan struct{})
+                        ot.mu.Unlock()
+                        close(oldCh)</span>
+                case &lt;-ot.stopCh:<span class="cov8" title="1">
+                        return</span>
+                }
+        }
 }
 </pre>
 		
