@@ -38,7 +38,9 @@ func (ot *Ticker) Stop() {
 	<-ot.doneCh
 }
 
-// NewLimiter returns a new Limiter using this Ticker.
+// NewLimiter returns a new Limiter using this Ticker. If this Ticker is stopped,
+// returns nil.
+//
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
 // Limits are applied in 100ms slices with fractional carry-over between
@@ -47,11 +49,16 @@ func (ot *Ticker) Stop() {
 //
 // To stop the limiter and free it's resources, call Stop.
 func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) {
-	return &Limiter{
-		Ticker: ot,
-		Reads:  NewOperation(ot, limits, 0),
-		Writes: NewOperation(ot, limits, 1),
+	ot.mu.Lock()
+	if ot.stopCh != nil {
+		l = &Limiter{
+			Ticker: ot,
+			Reads:  NewOperation(ot, limits, 0),
+			Writes: NewOperation(ot, limits, 1),
+		}
 	}
+	ot.mu.Unlock()
+	return
 }
 
 // WaitCh returns a channel that will close when the current rate limit
