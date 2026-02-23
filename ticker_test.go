@@ -68,13 +68,13 @@ func TestTicker_ConcurrentStopStress(t *testing.T) {
 		payload    = 64 * 1024
 	)
 
-	for iter := 0; iter < iterations; iter++ {
+	for range iterations {
 		synctest.Test(t, func(t *testing.T) {
 			ticker := NewTicker()
 			ls := make([]*Limiter, limiters)
 			ioDone := make(chan struct{}, limiters*2)
 
-			for i := 0; i < limiters; i++ {
+			for i := range limiters {
 				l := ticker.NewLimiter(1000, 1000)
 				ls[i] = l
 
@@ -96,7 +96,6 @@ func TestTicker_ConcurrentStopStress(t *testing.T) {
 			stopWG.Add(limiters + 1)
 
 			for i, l := range ls {
-				l := l
 				go func() {
 					defer stopWG.Done()
 					if i%2 == 0 {
@@ -124,7 +123,7 @@ func TestTicker_ConcurrentStopStress(t *testing.T) {
 				t.Fatal("timeout waiting for concurrent limiter/ticker Stop calls")
 			}
 
-			for i := 0; i < limiters*2; i++ {
+			for range limiters * 2 {
 				select {
 				case <-ioDone:
 				case <-time.After(10 * time.Second):

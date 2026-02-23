@@ -117,7 +117,7 @@ func (op *Operation) run(ch chan<- int64) {
 				seccount = 0
 			}
 			var rate int64
-			for i := 0; i < secparts; i++ {
+			for i := range secparts {
 				rate += counts[i]
 			}
 			op.Rate.Store(rate)
