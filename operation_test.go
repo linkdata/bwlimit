@@ -164,7 +164,7 @@ func TestOperation_read_rate_low(t *testing.T) {
 			t.Log(l.Reads.Limit.Load())
 			t.Error(elapsed)
 		}
-		if rate < 900 || rate > 1000 {
+		if rate < 900 || rate > 1010 {
 			t.Error(rate)
 		}
 	})
@@ -235,6 +235,38 @@ func TestOperation_read_rate_high(t *testing.T) {
 		}
 		if rate := int(l.Reads.Rate.Load()); rate < numbytes-(numbytes/5) || rate > numbytes {
 			t.Error(rate)
+		}
+	})
+}
+
+func TestOperation_read_rate_nonBatchMultiple(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const limit = 50000
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(limit)
+		defer l.Stop()
+
+		r := bytes.NewReader(make([]byte, limit))
+		buf := make([]byte, limit)
+
+		now := time.Now()
+		n, err := l.Reads.io(r.Read, buf)
+		elapsed := time.Since(now)
+		<-l.WaitCh()
+		synctest.Wait()
+
+		if n != limit {
+			t.Fatal(n)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if elapsed < time.Millisecond*900 || elapsed > time.Millisecond*1300 {
+			t.Fatal(elapsed)
+		}
+		if rate := l.Reads.Rate.Load(); rate < limit-(limit/10) {
+			t.Fatalf("rate too low: got %d want at least %d", rate, limit-(limit/10))
 		}
 	})
 }

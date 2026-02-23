@@ -73,18 +73,12 @@ func (op *Operation) run(ch chan<- int64) {
 
 	if stopCh != nil {
 		for {
-			var limitCh chan<- int64
 			var todo int64
-			var batch int64
 			if limit := op.Limit.Load(); limit > 0 {
 				carry += limit
 				todo = carry / secparts
 				carry = carry % secparts
 				todo += op.avail.Swap(0)
-				if todo > 0 {
-					limitCh = ch
-					batch = min(batchsize, todo)
-				}
 			} else {
 				carry = 0
 			}
@@ -92,6 +86,12 @@ func (op *Operation) run(ch chan<- int64) {
 
 		partialsecond:
 			for {
+				var limitCh chan<- int64
+				var batch int64
+				if todo > 0 {
+					limitCh = ch
+					batch = min(batchsize, todo)
+				}
 				select {
 				case <-stopCh:
 					return
@@ -100,15 +100,15 @@ func (op *Operation) run(ch chan<- int64) {
 				case limitCh <- batch:
 					todo -= batch
 					todo += op.avail.Swap(0)
-					if todo < batch {
-						<-waitCh
-						break partialsecond
-					}
 				case <-waitCh:
 					break partialsecond
 				}
 			}
 
+			// Preserve any budget left in this slice for the next one.
+			if todo > 0 {
+				op.avail.Add(todo)
+			}
 			count := op.count.Swap(0)
 			op.Count.Add(count)
 			counts[seccount] = count
