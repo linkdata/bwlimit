@@ -143,6 +143,7 @@ type Limiter struct {
 // NewLimiter returns a new limiter from DefaultTicker.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
+// Limits are applied in 100ms slices, so very low rates are approximate.
 //
 // To stop the Limiter and free it's resources, call Stop.
 func NewLimiter(limits ...int64) *Limiter <span class="cov8" title="1">{
@@ -228,6 +229,7 @@ type Operation struct {
         avail   atomic.Int64
         count   atomic.Int64
         ch      &lt;-chan int64
+        doneCh  chan struct{}
         reader  bool
         mu      sync.Mutex // protects following
         stopCh  chan struct{}
@@ -239,6 +241,7 @@ func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) <span clas
                 Ticker: t,
                 ch:     ch,
                 stopCh: make(chan struct{}),
+                doneCh: make(chan struct{}),
                 reader: idx == 0,
         }
         var limit int64
@@ -261,12 +264,17 @@ func (op *Operation) Stop() <span class="cov8" title="1">{
         if ch != nil </span><span class="cov8" title="1">{
                 close(ch)
         }</span>
+        <span class="cov8" title="1">&lt;-op.doneCh</span>
 }
 
 func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
-        defer close(ch)
+        defer func() </span><span class="cov8" title="1">{
+                close(ch)
+                op.Count.Add(op.count.Swap(0))
+                close(op.doneCh)
+        }</span>()
 
-        op.mu.Lock()
+        <span class="cov8" title="1">op.mu.Lock()
         stopCh := op.stopCh
         seccount := 0
         counts := make([]int64, secparts)
@@ -380,6 +388,7 @@ func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
 // NewLimiter returns a new Limiter using this Ticker.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
+// Limits are applied in 100ms slices, so very low rates are approximate.
 //
 // To stop the limiter and free it's resources, call Stop.
 func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) <span class="cov8" title="1">{
