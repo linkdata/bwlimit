@@ -227,14 +227,14 @@ type Operation struct {
         Count   atomic.Int64 // number of bytes seen
         avail   atomic.Int64
         count   atomic.Int64
-        ch      &lt;-chan int
+        ch      &lt;-chan int64
         reader  bool
         mu      sync.Mutex // protects following
         stopCh  chan struct{}
 }
 
 func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) <span class="cov8" title="1">{
-        ch := make(chan int)
+        ch := make(chan int64)
         op = &amp;Operation{
                 Ticker: t,
                 ch:     ch,
@@ -263,7 +263,7 @@ func (op *Operation) Stop() <span class="cov8" title="1">{
         }</span>
 }
 
-func (op *Operation) run(ch chan&lt;- int) <span class="cov8" title="1">{
+func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
         defer close(ch)
 
         op.mu.Lock()
@@ -274,12 +274,12 @@ func (op *Operation) run(ch chan&lt;- int) <span class="cov8" title="1">{
 
         if stopCh != nil </span><span class="cov8" title="1">{
                 for </span><span class="cov8" title="1">{
-                        var limitCh chan&lt;- int
-                        var todo int
-                        var batch int
+                        var limitCh chan&lt;- int64
+                        var todo int64
+                        var batch int64
                         if limit := op.Limit.Load(); limit &gt; 0 </span><span class="cov8" title="1">{
                                 limitCh = ch
-                                todo = max(1, int(limit/secparts))
+                                todo = max(1, limit/secparts)
                                 batch = min(batchsize, todo)
                         }</span>
                         <span class="cov8" title="1">waitCh := op.WaitCh()
@@ -291,7 +291,7 @@ func (op *Operation) run(ch chan&lt;- int) <span class="cov8" title="1">{
                                         return</span>
                                 case limitCh &lt;- batch:<span class="cov8" title="1">
                                         todo -= batch
-                                        todo += int(op.avail.Swap(0))
+                                        todo += op.avail.Swap(0)
                                         if todo &lt; batch </span><span class="cov8" title="1">{
                                                 &lt;-waitCh
                                                 break partialsecond</span>
@@ -328,15 +328,15 @@ func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err erro
                 err = io.EOF
                 if ok </span><span class="cov8" title="1">{
                         var done int
-                        todo := min(len(b), batch)
+                        todo := min(int64(len(b)), batch)
                         done, err = fn(b[:todo])
-                        op.avail.Add(int64(batch - done))
+                        op.avail.Add(batch - int64(done))
                         if done &gt; 0 </span><span class="cov8" title="1">{
                                 op.count.Add(int64(done))
-                                n += done
+                                n += int(done)
                                 b = b[done:]
                         }</span>
-                        <span class="cov8" title="1">if op.reader &amp;&amp; done &lt; todo </span><span class="cov8" title="1">{
+                        <span class="cov8" title="1">if op.reader &amp;&amp; int64(done) &lt; todo </span><span class="cov8" title="1">{
                                 break</span>
                         }
                 }
