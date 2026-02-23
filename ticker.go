@@ -11,7 +11,13 @@ type Ticker struct {
 	ch chan struct{}
 }
 
-var DefaultTicker *Ticker
+var DefaultTicker *Ticker = NewTicker()
+
+func NewTicker() (ot *Ticker) {
+	ot = &Ticker{ch: make(chan struct{})}
+	go ot.run()
+	return
+}
 
 // NewLimiter returns a new Limiter using this Ticker.
 // If you provide limits, the first will set
@@ -48,11 +54,4 @@ func (ot *Ticker) run() {
 		ot.mu.Unlock()
 		close(oldCh)
 	}
-}
-
-func init() {
-	DefaultTicker = &Ticker{
-		ch: make(chan struct{}),
-	}
-	go DefaultTicker.run()
 }
