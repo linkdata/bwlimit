@@ -338,7 +338,7 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
                                 seccount = 0
                         }</span>
                         <span class="cov8" title="1">var rate int64
-                        for i := 0; i &lt; secparts; i++ </span><span class="cov8" title="1">{
+                        for i := range secparts </span><span class="cov8" title="1">{
                                 rate += counts[i]
                         }</span>
                         <span class="cov8" title="1">op.Rate.Store(rate)</span>
