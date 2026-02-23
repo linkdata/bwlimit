@@ -68,6 +68,7 @@ func (op *Operation) run(ch chan<- int64) {
 	stopCh := op.stopCh
 	seccount := 0
 	counts := make([]int64, secparts)
+	carry := int64(0)
 	op.mu.Unlock()
 
 	if stopCh != nil {
@@ -76,9 +77,16 @@ func (op *Operation) run(ch chan<- int64) {
 			var todo int64
 			var batch int64
 			if limit := op.Limit.Load(); limit > 0 {
-				limitCh = ch
-				todo = max(1, limit/secparts)
-				batch = min(batchsize, todo)
+				carry += limit
+				todo = carry / secparts
+				carry = carry % secparts
+				todo += op.avail.Swap(0)
+				if todo > 0 {
+					limitCh = ch
+					batch = min(batchsize, todo)
+				}
+			} else {
+				carry = 0
 			}
 			waitCh := op.WaitCh()
 

@@ -15,7 +15,9 @@ type Limiter struct {
 // NewLimiter returns a new limiter from DefaultTicker.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
-// Limits are applied in 100ms slices, so very low rates are approximate.
+// Limits are applied in 100ms slices with fractional carry-over between
+// slices, so very low rates are accurate over time but can be bursty
+// at slice boundaries.
 //
 // To stop the Limiter and free it's resources, call Stop.
 func NewLimiter(limits ...int64) *Limiter {

@@ -14,7 +14,7 @@ Only depends on the standard library.
 `go get github.com/linkdata/bwlimit`
 
 `Ticker` must be created with `bwlimit.NewTicker()`. The zero-value `Ticker` is not supported.
-Limits are enforced in 100ms slices. Very low limits are therefore approximate rather than exact.
+Limits are enforced in 100ms slices with fractional carry-over between slices, so very low limits are accurate over time but can still be bursty at slice boundaries.
 
 ## Example
 

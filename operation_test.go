@@ -170,6 +170,34 @@ func TestOperation_read_rate_low(t *testing.T) {
 	}
 }
 
+func TestOperation_read_rate_very_low(t *testing.T) {
+	l := NewLimiter(5)
+	defer l.Stop()
+
+	r := bytes.NewReader(make([]byte, 5))
+	buf := make([]byte, 5)
+
+	now := time.Now()
+	n, err := l.Reads.io(r.Read, buf)
+	elapsed := time.Since(now)
+
+	if n != 5 {
+		t.Fatal(n)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 5 bytes at 5 bytes/sec should take about a second. The old fixed
+	// 100ms grant floor completed in about 500ms.
+	if elapsed < 700*time.Millisecond {
+		t.Fatalf("too fast for very low limit: %v", elapsed)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("too slow for very low limit: %v", elapsed)
+	}
+}
+
 func TestOperation_read_rate_high(t *testing.T) {
 	const numbytes = (2 * 1024 * 1024 * 1024) - 1
 	l := NewLimiter(numbytes)
