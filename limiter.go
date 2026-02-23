@@ -28,6 +28,8 @@ func NewLimiter(limits ...int64) *Limiter {
 // Stop stops the Limiter and frees any resources. Reads and writes on
 // a stopped and rate-limited Limiter returns io.EOF. On an unlimited
 // Limiter they function as normal.
+//
+// Count and Rate metrics are not updated after Stop.
 func (l *Limiter) Stop() {
 	l.Reads.Stop()
 	l.Writes.Stop()

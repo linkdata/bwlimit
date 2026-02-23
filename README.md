@@ -15,6 +15,7 @@ Only depends on the standard library.
 
 `Ticker` must be created with `bwlimit.NewTicker()`. The zero-value `Ticker` is not supported.
 Limits are enforced in 100ms slices with fractional carry-over between slices, so very low limits are accurate over time but can still be bursty at slice boundaries.
+After calling `Limiter.Stop()`, bandwidth metrics (`Count` and `Rate`) are no longer updated.
 
 ## Example
 
