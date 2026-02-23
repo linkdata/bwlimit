@@ -141,6 +141,7 @@ type Limiter struct {
 }
 
 // NewLimiter returns a new limiter from DefaultTicker.
+// If DefaultTicker has been stopped, returns nil.
 // If you provide limits, the first will set
 // both read and write limits, the second will set the write limit.
 // Limits are applied in 100ms slices with fractional carry-over between
@@ -293,42 +294,42 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
 
         if stopCh != nil </span><span class="cov8" title="1">{
                 for </span><span class="cov8" title="1">{
-                        var limitCh chan&lt;- int64
                         var todo int64
-                        var batch int64
                         if limit := op.Limit.Load(); limit &gt; 0 </span><span class="cov8" title="1">{
                                 carry += limit
                                 todo = carry / secparts
                                 carry = carry % secparts
                                 todo += op.avail.Swap(0)
-                                if todo &gt; 0 </span><span class="cov8" title="1">{
-                                        limitCh = ch
-                                        batch = min(batchsize, todo)
-                                }</span>
-                        } else<span class="cov8" title="1"> {
+                        }</span> else<span class="cov8" title="1"> {
                                 carry = 0
                         }</span>
                         <span class="cov8" title="1">waitCh := op.WaitCh()
 
                 partialsecond:
                         for </span><span class="cov8" title="1">{
-                                select </span>{
+                                var limitCh chan&lt;- int64
+                                var batch int64
+                                if todo &gt; 0 </span><span class="cov8" title="1">{
+                                        limitCh = ch
+                                        batch = min(batchsize, todo)
+                                }</span>
+                                <span class="cov8" title="1">select </span>{
                                 case &lt;-stopCh:<span class="cov8" title="1">
                                         return</span>
                                 case &lt;-op.Ticker.doneCh:<span class="cov8" title="1">
                                         return</span>
                                 case limitCh &lt;- batch:<span class="cov8" title="1">
                                         todo -= batch
-                                        todo += op.avail.Swap(0)
-                                        if todo &lt; batch </span><span class="cov8" title="1">{
-                                                &lt;-waitCh
-                                                break partialsecond</span>
-                                        }
+                                        todo += op.avail.Swap(0)</span>
                                 case &lt;-waitCh:<span class="cov8" title="1">
                                         break partialsecond</span>
                                 }
                         }
 
+                        // Preserve any budget left in this slice for the next one.
+                        <span class="cov8" title="1">if todo &gt; 0 </span><span class="cov8" title="1">{
+                                op.avail.Add(todo)
+                        }</span>
                         <span class="cov8" title="1">count := op.count.Swap(0)
                         op.Count.Add(count)
                         counts[seccount] = count
