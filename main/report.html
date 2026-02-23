@@ -361,7 +361,13 @@ type Ticker struct {
         ch chan struct{}
 }
 
-var DefaultTicker *Ticker
+var DefaultTicker *Ticker = NewTicker()
+
+func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
+        ot = &amp;Ticker{ch: make(chan struct{})}
+        go ot.run()
+        return
+}</span>
 
 // NewLimiter returns a new Limiter using this Ticker.
 // If you provide limits, the first will set
@@ -399,13 +405,6 @@ func (ot *Ticker) run() <span class="cov8" title="1">{
                 close(oldCh)
         }</span>
 }
-
-func init() <span class="cov8" title="1">{
-        DefaultTicker = &amp;Ticker{
-                ch: make(chan struct{}),
-        }
-        go DefaultTicker.run()
-}</span>
 </pre>
 		
 		</div>
