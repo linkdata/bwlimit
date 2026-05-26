@@ -80,7 +80,11 @@ func (op *Operation) run(ch chan<- int64) {
 				carry = carry % secparts
 				todo += op.avail.Swap(0)
 			} else {
+				// Drop any accumulated state so that switching back to
+				// a positive limit cannot replay a burst of previously
+				// refunded bytes.
 				carry = 0
+				op.avail.Store(0)
 			}
 			waitCh := op.WaitCh()
 

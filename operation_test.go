@@ -306,6 +306,46 @@ func TestOperation_read_noIdleBurstAccumulation(t *testing.T) {
 	})
 }
 
+func TestOperation_read_noBurstAcrossUnlimitedTransition(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ticker := NewTicker()
+		defer ticker.Stop()
+		l := ticker.NewLimiter(10000)
+		defer l.Stop()
+
+		// Short read leaves refunded bytes in op.avail.
+		_, _ = l.Reads.io(bytes.NewReader(make([]byte, 1)).Read, make([]byte, 4096))
+
+		// Going unlimited must drop the accumulated refund so it cannot
+		// be replayed as a burst when limited again.
+		l.Reads.Limit.Store(0)
+		for range 5 {
+			<-l.WaitCh()
+		}
+		synctest.Wait()
+
+		l.Reads.Limit.Store(100)
+		<-l.WaitCh()
+
+		r := bytes.NewReader(make([]byte, 500))
+		buf := make([]byte, 500)
+		now := time.Now()
+		n, err := l.Reads.io(r.Read, buf)
+		elapsed := time.Since(now)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 500 {
+			t.Fatal(n)
+		}
+		// 500 bytes at 100 bytes/sec should take about 5 seconds.
+		if elapsed < 3*time.Second {
+			t.Fatalf("burst across unlimited transition: %d bytes in %v", n, elapsed)
+		}
+	})
+}
+
 func TestOperation_write_rate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ticker := NewTicker()
