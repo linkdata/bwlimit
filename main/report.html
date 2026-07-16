@@ -303,7 +303,11 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
                                 carry = carry % secparts
                                 todo += op.avail.Swap(0)
                         }</span> else<span class="cov8" title="1"> {
+                                // Drop any accumulated state so that switching back to
+                                // a positive limit cannot replay a burst of previously
+                                // refunded bytes.
                                 carry = 0
+                                op.avail.Store(0)
                         }</span>
                         <span class="cov8" title="1">waitCh := op.WaitCh()
 
