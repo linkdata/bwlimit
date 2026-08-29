@@ -90,13 +90,13 @@ type Conn struct {
         *Limiter // Limiter to use
 }
 
-func (c *Conn) Read(b []byte) (n int, err error) <span class="cov8" title="1">{
-        return c.Limiter.Reads.io(c.Conn.Read, b)
-}</span>
+func (c *Conn) Read(b []byte) (n int, err error) {
+        <span class="cov8" title="1">return c.Limiter.Reads.io(c.Conn.Read, b)
+</span>}
 
-func (c *Conn) Write(b []byte) (n int, err error) <span class="cov8" title="1">{
-        return c.Limiter.Writes.io(c.Conn.Write, b)
-}</span>
+func (c *Conn) Write(b []byte) (n int, err error) {
+        <span class="cov8" title="1">return c.Limiter.Writes.io(c.Conn.Write, b)
+</span>}
 </pre>
 		
 		<pre class="file" id="file1" style="display: none">package bwlimit
@@ -111,19 +111,19 @@ type Dialer struct {
         *Limiter      // Limiter to use
 }
 
-func (d *Dialer) DialContext(ctx context.Context, network, address string) (conn net.Conn, err error) <span class="cov8" title="1">{
-        if conn, err = d.ContextDialer.DialContext(ctx, network, address); err == nil </span><span class="cov8" title="1">{
-                conn = &amp;Conn{
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (conn net.Conn, err error) {
+        <span class="cov8" title="1">if conn, err = d.ContextDialer.DialContext(ctx, network, address); err == nil </span>{
+                <span class="cov8" title="1">conn = &amp;Conn{
                         Conn:    conn,
                         Limiter: d.Limiter,
-                }
-        }</span>
+</span>                }
+        }
         <span class="cov8" title="1">return</span>
 }
 
-func (d *Dialer) Dial(network string, address string) (net.Conn, error) <span class="cov8" title="1">{
-        return d.DialContext(context.Background(), network, address)
-}</span>
+func (d *Dialer) Dial(network string, address string) (net.Conn, error) {
+        <span class="cov8" title="1">return d.DialContext(context.Background(), network, address)
+</span>}
 </pre>
 		
 		<pre class="file" id="file2" style="display: none">package bwlimit
@@ -149,40 +149,40 @@ type Limiter struct {
 // at slice boundaries.
 //
 // To stop the Limiter and free it's resources, call Stop.
-func NewLimiter(limits ...int64) *Limiter <span class="cov8" title="1">{
-        return DefaultTicker.NewLimiter(limits...)
-}</span>
+func NewLimiter(limits ...int64) *Limiter {
+        <span class="cov8" title="1">return DefaultTicker.NewLimiter(limits...)
+</span>}
 
 // Stop stops the Limiter and frees any resources. Reads and writes on
 // a stopped and rate-limited Limiter returns io.EOF. On an unlimited
 // Limiter they function as normal.
 //
 // Count and Rate metrics are not updated after Stop.
-func (l *Limiter) Stop() <span class="cov8" title="1">{
-        l.Reads.Stop()
+func (l *Limiter) Stop() {
+        <span class="cov8" title="1">l.Reads.Stop()
         l.Writes.Stop()
-}</span>
+</span>}
 
 // alreadyLimits returns true if cd is already limited by this Limiter.
 // This lets us help the user avoiding double-accounting bandwidth.
-func (l *Limiter) alreadyLimits(cd ContextDialer) bool <span class="cov8" title="1">{
-        seen := make(map[*Dialer]struct{})
-        for </span><span class="cov8" title="1">{
-                if d, ok := cd.(*Dialer); ok </span><span class="cov8" title="1">{
-                        if d == nil </span><span class="cov8" title="1">{
-                                return false
-                        }</span>
-                        <span class="cov8" title="1">if d.Limiter == l </span><span class="cov8" title="1">{
-                                return true
-                        }</span>
-                        <span class="cov8" title="1">if _, ok := seen[d]; ok </span><span class="cov8" title="1">{
-                                return false
-                        }</span>
+func (l *Limiter) alreadyLimits(cd ContextDialer) bool {
+        <span class="cov8" title="1">seen := make(map[*Dialer]struct{})
+        for </span>{
+                <span class="cov8" title="1">if d, ok := cd.(*Dialer); ok </span>{
+                        <span class="cov8" title="1">if d == nil </span>{
+                                <span class="cov8" title="1">return false
+</span>                        }
+                        <span class="cov8" title="1">if d.Limiter == l </span>{
+                                <span class="cov8" title="1">return true
+</span>                        }
+                        <span class="cov8" title="1">if _, ok := seen[d]; ok </span>{
+                                <span class="cov8" title="1">return false
+</span>                        }
                         <span class="cov8" title="1">seen[d] = struct{}{}
                         cd = d.ContextDialer</span>
-                } else<span class="cov8" title="1"> {
-                        return false
-                }</span>
+                } else {
+                        <span class="cov8" title="1">return false
+</span>                }
         }
 }
 
@@ -190,13 +190,13 @@ func (l *Limiter) alreadyLimits(cd ContextDialer) bool <span class="cov8" title=
 //
 // If cd is nil we use DefaultNetDialer. If cd is already limited by this Limiter, cd
 // is returned unchanged.
-func (l *Limiter) Wrap(cd ContextDialer) ContextDialer <span class="cov8" title="1">{
-        if cd == nil </span><span class="cov8" title="1">{
-                cd = DefaultNetDialer
-        }</span>
-        <span class="cov8" title="1">if l.alreadyLimits(cd) </span><span class="cov8" title="1">{
-                return cd
-        }</span>
+func (l *Limiter) Wrap(cd ContextDialer) ContextDialer {
+        <span class="cov8" title="1">if cd == nil </span>{
+                <span class="cov8" title="1">cd = DefaultNetDialer
+</span>        }
+        <span class="cov8" title="1">if l.alreadyLimits(cd) </span>{
+                <span class="cov8" title="1">return cd
+</span>        }
         <span class="cov8" title="1">return &amp;Dialer{ContextDialer: cd, Limiter: l}</span>
 }
 </pre>
@@ -210,13 +210,13 @@ type Listener struct {
         *Limiter     // Limiter to use
 }
 
-func (l *Listener) Accept() (conn net.Conn, err error) <span class="cov8" title="1">{
-        if conn, err = l.Listener.Accept(); err == nil </span><span class="cov8" title="1">{
-                conn = &amp;Conn{
+func (l *Listener) Accept() (conn net.Conn, err error) {
+        <span class="cov8" title="1">if conn, err = l.Listener.Accept(); err == nil </span>{
+                <span class="cov8" title="1">conn = &amp;Conn{
                         Conn:    conn,
                         Limiter: l.Limiter,
-                }
-        }</span>
+</span>                }
+        }
         <span class="cov8" title="1">return</span>
 }
 </pre>
@@ -248,44 +248,44 @@ type Operation struct {
         stopCh  chan struct{}
 }
 
-func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) <span class="cov8" title="1">{
-        ch := make(chan int64)
+func NewOperation(t *Ticker, limits []int64, idx int) (op *Operation) {
+        <span class="cov8" title="1">ch := make(chan int64)
         op = &amp;Operation{
                 Ticker: t,
                 ch:     ch,
                 stopCh: make(chan struct{}),
                 doneCh: make(chan struct{}),
                 reader: idx == 0,
-        }
-        var limit int64
-        if len(limits) &gt; 0 </span><span class="cov8" title="1">{
-                limit = limits[0]
-                if len(limits) &gt; idx </span><span class="cov8" title="1">{
-                        limit = limits[idx]
-                }</span>
+</span>        }
+        <span class="cov8" title="1">var limit int64
+        if len(limits) &gt; 0 </span>{
+                <span class="cov8" title="1">limit = limits[0]
+                if len(limits) &gt; idx </span>{
+                        <span class="cov8" title="1">limit = limits[idx]
+</span>                }
         }
         <span class="cov8" title="1">op.Limit.Store(limit)
         go op.run(ch)
         return</span>
 }
 
-func (op *Operation) Stop() <span class="cov8" title="1">{
-        op.mu.Lock()
+func (op *Operation) Stop() {
+        <span class="cov8" title="1">op.mu.Lock()
         ch := op.stopCh
         op.stopCh = nil
         op.mu.Unlock()
-        if ch != nil </span><span class="cov8" title="1">{
-                close(ch)
-        }</span>
+        if ch != nil </span>{
+                <span class="cov8" title="1">close(ch)
+</span>        }
         <span class="cov8" title="1">&lt;-op.doneCh</span>
 }
 
-func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
-        defer func() </span><span class="cov8" title="1">{
-                close(ch)
+func (op *Operation) run(ch chan&lt;- int64) {
+        <span class="cov8" title="1">defer func() </span>{
+                <span class="cov8" title="1">close(ch)
                 op.Count.Add(op.count.Swap(0))
                 close(op.doneCh)
-        }</span>()
+</span>        }()
 
         <span class="cov8" title="1">op.mu.Lock()
         stopCh := op.stopCh
@@ -293,42 +293,42 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
         counts := make([]int64, secparts)
         carry := int64(0)
         op.mu.Unlock()
-
-        if stopCh != nil </span><span class="cov8" title="1">{
-                for </span><span class="cov8" title="1">{
-                        var todo int64
-                        if limit := op.Limit.Load(); limit &gt; 0 </span><span class="cov8" title="1">{
-                                carry += limit
+</span>
+        <span class="cov8" title="1">if stopCh != nil </span>{
+                <span class="cov8" title="1">for </span>{
+                        <span class="cov8" title="1">var todo int64
+                        if limit := op.Limit.Load(); limit &gt; 0 </span>{
+                                <span class="cov8" title="1">carry += limit
                                 todo = carry / secparts
                                 carry = carry % secparts
                                 todo += op.avail.Swap(0)
-                        }</span> else<span class="cov8" title="1"> {
+</span>                        } else {
                                 // Drop any accumulated state so that switching back to
                                 // a positive limit cannot replay a burst of previously
                                 // refunded bytes.
-                                carry = 0
+                                <span class="cov8" title="1">carry = 0
                                 op.avail.Store(0)
-                        }</span>
+</span>                        }
                         <span class="cov8" title="1">waitCh := op.WaitCh()
-
-                partialsecond:
-                        for </span><span class="cov8" title="1">{
-                                var limitCh chan&lt;- int64
+</span>
+                <span class="cov8" title="1">partialsecond:
+                        for </span>{
+                                <span class="cov8" title="1">var limitCh chan&lt;- int64
                                 var batch int64
-                                if todo &gt; 0 </span><span class="cov8" title="1">{
-                                        limitCh = ch
+                                if todo &gt; 0 </span>{
+                                        <span class="cov8" title="1">limitCh = ch
                                         batch = min(batchsize, todo)
-                                }</span>
+</span>                                }
                                 <span class="cov8" title="1">select </span>{
-                                case &lt;-stopCh:<span class="cov8" title="1">
-                                        return</span>
-                                case &lt;-op.Ticker.doneCh:<span class="cov8" title="1">
-                                        return</span>
-                                case limitCh &lt;- batch:<span class="cov8" title="1">
-                                        todo -= batch
+                                case &lt;-stopCh:
+                                        <span class="cov8" title="1">return</span>
+                                case &lt;-op.Ticker.doneCh:
+                                        <span class="cov8" title="1">return</span>
+                                case limitCh &lt;- batch:
+                                        <span class="cov8" title="1">todo -= batch
                                         todo += op.avail.Swap(0)</span>
-                                case &lt;-waitCh:<span class="cov8" title="1">
-                                        break partialsecond</span>
+                                case &lt;-waitCh:
+                                        <span class="cov8" title="1">break partialsecond</span>
                                 }
                         }
 
@@ -338,51 +338,51 @@ func (op *Operation) run(ch chan&lt;- int64) <span class="cov8" title="1">{
                         op.Count.Add(count)
                         counts[seccount] = count
                         seccount++
-                        if seccount &gt;= secparts </span><span class="cov8" title="1">{
-                                seccount = 0
-                        }</span>
+                        if seccount &gt;= secparts </span>{
+                                <span class="cov8" title="1">seccount = 0
+</span>                        }
                         <span class="cov8" title="1">var rate int64
-                        for i := range secparts </span><span class="cov8" title="1">{
-                                rate += counts[i]
-                        }</span>
+                        for i := range secparts </span>{
+                                <span class="cov8" title="1">rate += counts[i]
+</span>                        }
                         <span class="cov8" title="1">op.Rate.Store(rate)</span>
                 }
         }
 }
 
-func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) <span class="cov8" title="1">{
-outer:
-        for len(b) &gt; 0 &amp;&amp; err == nil </span><span class="cov8" title="1">{
-                var done int
-                if op.Limit.Load() &lt; 1 </span><span class="cov8" title="1">{
-                        done, err = fn(b)
+func (op *Operation) io(fn func([]byte) (int, error), b []byte) (n int, err error) {
+<span class="cov8" title="1">outer:
+        for len(b) &gt; 0 &amp;&amp; err == nil </span>{
+                <span class="cov8" title="1">var done int
+                if op.Limit.Load() &lt; 1 </span>{
+                        <span class="cov8" title="1">done, err = fn(b)
                         n += done
                         op.count.Add(int64(done))
                         return
-                }</span>
+</span>                }
                 <span class="cov8" title="1">select </span>{
-                case batch, ok := &lt;-op.ch:<span class="cov8" title="1">
-                        err = io.EOF
-                        if ok </span><span class="cov8" title="1">{
-                                todo := min(int64(len(b)), batch)
+                case batch, ok := &lt;-op.ch:
+                        <span class="cov8" title="1">err = io.EOF
+                        if ok </span>{
+                                <span class="cov8" title="1">todo := min(int64(len(b)), batch)
                                 done, err = fn(b[:todo])
                                 op.avail.Add(batch - int64(done))
-                                if done &gt; 0 </span><span class="cov8" title="1">{
-                                        op.count.Add(int64(done))
+                                if done &gt; 0 </span>{
+                                        <span class="cov8" title="1">op.count.Add(int64(done))
                                         n += int(done)
                                         b = b[done:]
-                                }</span>
-                                <span class="cov8" title="1">if op.reader &amp;&amp; int64(done) &lt; todo </span><span class="cov8" title="1">{
-                                        break outer</span>
+</span>                                }
+                                <span class="cov8" title="1">if op.reader &amp;&amp; int64(done) &lt; todo </span>{
+                                        <span class="cov8" title="1">break outer</span>
                                 }
                         }
                 case &lt;-op.WaitCh():<span class="cov8" title="1"></span>
                 }
         }
 
-        <span class="cov8" title="1">if op.reader &amp;&amp; n &gt; 0 &amp;&amp; err == io.EOF </span><span class="cov8" title="1">{
-                err = nil
-        }</span>
+        <span class="cov8" title="1">if op.reader &amp;&amp; n &gt; 0 &amp;&amp; err == io.EOF </span>{
+                <span class="cov8" title="1">err = nil
+</span>        }
         <span class="cov8" title="1">return</span>
 }
 </pre>
@@ -406,23 +406,23 @@ type Ticker struct {
 var DefaultTicker *Ticker = NewTicker()
 
 // NewTicker creates and starts a Ticker.
-func NewTicker() (ot *Ticker) <span class="cov8" title="1">{
-        ot = &amp;Ticker{
+func NewTicker() (ot *Ticker) {
+        <span class="cov8" title="1">ot = &amp;Ticker{
                 ch:     make(chan struct{}),
                 stopCh: make(chan struct{}),
                 doneCh: make(chan struct{}),
-        }
-        go ot.run(ot.stopCh)
+</span>        }
+        <span class="cov8" title="1">go ot.run(ot.stopCh)
         return
-}</span>
+</span>}
 
 // Stop stops the Ticker and closes the current WaitCh channel.
-func (ot *Ticker) Stop() <span class="cov8" title="1">{
-        ot.mu.Lock()
-        if ch := ot.stopCh; ch != nil </span><span class="cov8" title="1">{
-                ot.stopCh = nil
+func (ot *Ticker) Stop() {
+        <span class="cov8" title="1">ot.mu.Lock()
+        if ch := ot.stopCh; ch != nil </span>{
+                <span class="cov8" title="1">ot.stopCh = nil
                 close(ch)
-        }</span>
+</span>        }
         <span class="cov8" title="1">ot.mu.Unlock()
         &lt;-ot.doneCh</span>
 }
@@ -437,48 +437,48 @@ func (ot *Ticker) Stop() <span class="cov8" title="1">{
 // at slice boundaries.
 //
 // To stop the limiter and free it's resources, call Stop.
-func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) <span class="cov8" title="1">{
-        ot.mu.Lock()
-        if ot.stopCh != nil </span><span class="cov8" title="1">{
-                l = &amp;Limiter{
+func (ot *Ticker) NewLimiter(limits ...int64) (l *Limiter) {
+        <span class="cov8" title="1">ot.mu.Lock()
+        if ot.stopCh != nil </span>{
+                <span class="cov8" title="1">l = &amp;Limiter{
                         Ticker: ot,
                         Reads:  NewOperation(ot, limits, 0),
                         Writes: NewOperation(ot, limits, 1),
-                }
-        }</span>
+</span>                }
+        }
         <span class="cov8" title="1">ot.mu.Unlock()
         return</span>
 }
 
 // WaitCh returns a channel that will close when the current rate limit
 // time slice runs out.
-func (ot *Ticker) WaitCh() (ch &lt;-chan struct{}) <span class="cov8" title="1">{
-        ot.mu.Lock()
+func (ot *Ticker) WaitCh() (ch &lt;-chan struct{}) {
+        <span class="cov8" title="1">ot.mu.Lock()
         ch = ot.ch
         ot.mu.Unlock()
         return
-}</span>
+</span>}
 
-func (ot *Ticker) run(stopCh chan struct{}) <span class="cov8" title="1">{
-        defer func() </span><span class="cov8" title="1">{
-                close(ot.ch)
+func (ot *Ticker) run(stopCh chan struct{}) {
+        <span class="cov8" title="1">defer func() </span>{
+                <span class="cov8" title="1">close(ot.ch)
                 close(ot.doneCh)
-        }</span>()
+</span>        }()
 
         <span class="cov8" title="1">tckr := time.NewTicker(interval)
         defer tckr.Stop()
-
-        for </span><span class="cov8" title="1">{
-                select </span>{
-                case &lt;-tckr.C:<span class="cov8" title="1">
-                        newCh := make(chan struct{})
+</span>
+        <span class="cov8" title="1">for </span>{
+                <span class="cov8" title="1">select </span>{
+                case &lt;-tckr.C:
+                        <span class="cov8" title="1">newCh := make(chan struct{})
                         ot.mu.Lock()
                         oldCh := ot.ch
                         ot.ch = newCh
                         ot.mu.Unlock()
                         close(oldCh)</span>
-                case &lt;-stopCh:<span class="cov8" title="1">
-                        return</span>
+                case &lt;-stopCh:
+                        <span class="cov8" title="1">return</span>
                 }
         }
 }
